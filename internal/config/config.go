@@ -12,6 +12,7 @@ type Config struct {
 	Port        string
 	DatabaseURL string
 	Media       MediaConfig
+	Geodata     GeodataConfig
 }
 
 // MediaConfig describes S3/media related configuration.
@@ -22,6 +23,12 @@ type MediaConfig struct {
 	PublicURL      string
 	KeyPrefix      string
 	ForcePathStyle bool
+}
+
+// GeodataConfig bundles relevant API keys.
+type GeodataConfig struct {
+	GooglePlacesAPIKey string
+	TrafficAPIKey      string
 }
 
 // FromEnv loads configuration from environment variables and applies defaults.
@@ -36,6 +43,10 @@ func FromEnv() Config {
 			PublicURL:      os.Getenv("S3_PUBLIC_URL"),
 			KeyPrefix:      strings.Trim(os.Getenv("S3_KEY_PREFIX"), "/"),
 			ForcePathStyle: getenvBool("S3_FORCE_PATH_STYLE", false),
+		},
+		Geodata: GeodataConfig{
+			GooglePlacesAPIKey: os.Getenv("GOOGLE_PLACES_API_KEY"),
+			TrafficAPIKey:      os.Getenv("TRAFIKLAB_API_KEY"),
 		},
 	}
 

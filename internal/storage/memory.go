@@ -30,6 +30,9 @@ func (s *InMemoryStore) CreateListing(_ context.Context, input Listing) (Listing
 	if input.CreatedAt.IsZero() {
 		input.CreatedAt = time.Now()
 	}
+	if input.Sections == nil {
+		input.Sections = []Section{}
+	}
 
 	s.listings = append([]Listing{input}, s.listings...)
 	if len(s.listings) > 50 {

@@ -65,7 +65,7 @@ small.help-text {
     font-size: 0.85rem;
 }
 
-input, select, button {
+input, select, textarea, button {
     width: 100%;
     padding: 0.75rem 0.9rem;
     border-radius: 8px;
@@ -127,6 +127,12 @@ button.secondary {
     max-height: 220px;
 }
 
+.list__facts {
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
 .list__item h3 {
     margin: 0 0 0.3rem 0;
 }
@@ -147,4 +153,41 @@ button.secondary {
     padding: 0.25rem 0.75rem;
     font-weight: 600;
     font-size: 0.85rem;
+}
+
+.section-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.section-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem;
+    background: #fbfcfd;
+}
+
+.section-card h4 {
+    margin: 0 0 0.35rem 0;
+    font-size: 1rem;
+}
+
+.poi-block {
+    margin-top: 0.75rem;
+}
+
+.poi-block h4 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1rem;
+}
+
+.poi-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.25rem;
+    color: var(--muted);
 }

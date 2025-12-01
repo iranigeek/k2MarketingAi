@@ -71,7 +71,14 @@ Exempelpayload för `POST /api/listings/`:
   "address": "Skolgatan 12",
   "tone": "Exklusiv och sofistikerad",
   "target_audience": "Barnfamiljer",
-  "highlights": ["Låg avgift", "Balkong i söderläge"]
+  "highlights": ["Låg avgift", "Balkong i söderläge"],
+  "fee": 3200,
+  "living_area": 82,
+  "rooms": 3.5,
+  "instructions": "Betona balkongen och håll tonen varm.",
+  "sections": [
+    {"slug": "intro", "title": "Inledning", "content": "Inledningstext..."}
+  ]
 }
 ```
 
@@ -93,6 +100,19 @@ Aktivera genom att exportera följande variabler innan du startar API:t:
 > Tips: Om du kör lokalt mot MinIO kan du sätta `S3_ENDPOINT=http://localhost:9000`, `S3_FORCE_PATH_STYLE=true` och `S3_PUBLIC_URL=http://localhost:9000/<bucket>` för att kunna förhandsgranska bilderna.
 
 Om `S3_BUCKET` eller `S3_REGION` utelämnas faller uppladdningar tillbaka till ett inaktiverat läge och backend returnerar ett tydligt fel när en bild skickas med.
+
+## Modulär text & geodata
+
+Backend skapar nu strukturerade sektioner (Inledning, Hall, Kök, Vardagsrum, Område) för varje objekt. Frontend visar dessa sektioner i respektive kort, redo för framtida omskrivningsflöden.
+
+Geodata hämtas via Google Geocoding + Places. Aktivera båda API:erna i Google Cloud och exportera nyckeln:
+
+| Variabel | Beskrivning |
+| --- | --- |
+| `GOOGLE_PLACES_API_KEY` | API-nyckel för Geocoding + Places |
+| `TRAFIKLAB_API_KEY` | Nyckel för Trafiklab/Resrobot |
+
+Utvecklingsläge: om nyckeln saknas faller providern tillbaka till statiska exempel.
 
 ## Nästa steg
 

@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"k2MarketingAi/internal/config"
+	"k2MarketingAi/internal/geodata"
 	"k2MarketingAi/internal/listings"
 	"k2MarketingAi/internal/media"
 	"k2MarketingAi/internal/server"
@@ -37,7 +38,12 @@ func main() {
 		log.Fatalf("failed to init media uploader: %v", err)
 	}
 
-	listingHandler := listings.Handler{Store: store, Uploader: uploader}
+	geoProvider := geodata.NewProvider(geodata.Config{
+		GooglePlacesAPIKey: cfg.Geodata.GooglePlacesAPIKey,
+		TrafficAPIKey:      cfg.Geodata.TrafficAPIKey,
+	})
+
+	listingHandler := listings.Handler{Store: store, Uploader: uploader, GeoProvider: geoProvider}
 
 	staticFS := http.FileServer(http.Dir("web"))
 	srv := server.New(cfg.Port, listingHandler, staticFS)

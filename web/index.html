@@ -34,6 +34,18 @@
                 <label for="highlights">Viktiga säljargument (komma-separerade)</label>
                 <input id="highlights" name="highlights" type="text" placeholder="Låg avgift, balkong i söderläge">
 
+                <label for="fee">Avgift (SEK)</label>
+                <input id="fee" name="fee" type="number" min="0" step="100" placeholder="3200">
+
+                <label for="living-area">Boarea (kvm)</label>
+                <input id="living-area" name="living_area" type="number" min="0" step="0.5" placeholder="82">
+
+                <label for="rooms">Antal rum</label>
+                <input id="rooms" name="rooms" type="number" min="0" step="0.5" placeholder="3.5">
+
+                <label for="instructions">Ton & instruktioner</label>
+                <textarea id="instructions" name="instructions" rows="3" placeholder="Kort, snärtig ton. Betona den stora balkongen."></textarea>
+
                 <label for="photo">Ladda upp bild</label>
                 <input id="photo" name="photo" type="file" accept="image/*">
                 <small class="help-text">Stödjer JPG/PNG upp till 5 MB.</small>
