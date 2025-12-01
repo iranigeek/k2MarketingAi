@@ -15,6 +15,7 @@ type Listing struct {
 	Tone           string    `json:"tone"`
 	TargetAudience string    `json:"target_audience"`
 	Highlights     []string  `json:"highlights"`
+	ImageURL       string    `json:"image_url,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -56,10 +57,15 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
         tone TEXT NOT NULL,
         target_audience TEXT NOT NULL,
         highlights TEXT[],
+        image_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`)
 	if err != nil {
 		return fmt.Errorf("create listings table: %w", err)
+	}
+
+	if _, err := pool.Exec(ctx, `ALTER TABLE listings ADD COLUMN IF NOT EXISTS image_url TEXT`); err != nil {
+		return fmt.Errorf("alter listings table: %w", err)
 	}
 
 	return nil

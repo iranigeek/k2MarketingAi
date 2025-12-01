@@ -16,6 +16,7 @@ async function fetchListings() {
         data.forEach(item => {
             const li = document.createElement('li');
             li.className = 'list__item';
+            const imageMarkup = item.image_url ? `<img class="list__image" src="${item.image_url}" alt="Bild för ${item.address}" loading="lazy">` : '';
             li.innerHTML = `
                 <h3>${item.address}</h3>
                 <div class="list__meta">
@@ -24,6 +25,7 @@ async function fetchListings() {
                     <span>${new Date(item.created_at).toLocaleString('sv-SE')}</span>
                 </div>
                 ${item.highlights?.length ? `<p>${item.highlights.join(', ')}</p>` : ''}
+                ${imageMarkup}
             `;
             listEl.appendChild(li);
         });
@@ -41,13 +43,21 @@ async function submitListing(event) {
     const tone = document.getElementById('tone').value;
     const audience = document.getElementById('audience').value.trim();
     const highlightsRaw = document.getElementById('highlights').value.trim();
-    const highlights = highlightsRaw ? highlightsRaw.split(',').map(h => h.trim()).filter(Boolean) : [];
+    const fileInput = document.getElementById('photo');
 
     try {
+        const formData = new FormData();
+        formData.append('address', address);
+        formData.append('tone', tone);
+        formData.append('target_audience', audience);
+        formData.append('highlights', highlightsRaw);
+        if (fileInput.files.length > 0) {
+            formData.append('photo', fileInput.files[0]);
+        }
+
         const res = await fetch('/api/listings/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, tone, target_audience: audience, highlights })
+            body: formData
         });
 
         if (!res.ok) {

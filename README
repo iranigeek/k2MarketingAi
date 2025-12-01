@@ -75,9 +75,28 @@ Exempelpayload för `POST /api/listings/`:
 }
 ```
 
+## Bilduppladdning via S3
+
+Formuläret i webben stöder nu `multipart/form-data` med fältet `photo`. Backend laddar upp filen (max 5 MB, jpg/png) till en S3-kompatibel bucket och sparar URL:en på respektive listing.
+
+Aktivera genom att exportera följande variabler innan du startar API:t:
+
+| Variabel | Beskrivning |
+| --- | --- |
+| `S3_BUCKET` | Namnet på bucketen där bilderna ska sparas (obligatorisk) |
+| `S3_REGION` | AWS-region (obligatorisk) |
+| `S3_KEY_PREFIX` | (Valfri) mapp-prefix, t.ex. `uploads/listings` |
+| `S3_PUBLIC_URL` | (Valfri) Publik bas-URL/CNAME om du serverar via CloudFront el. liknande |
+| `S3_ENDPOINT` | (Valfri) Eget endpoint för S3-kompatibel lagring, används ihop med `S3_FORCE_PATH_STYLE=true` för t.ex. MinIO/Wasabi |
+| `S3_FORCE_PATH_STYLE` | Sätt till `true` om din endpoint kräver path-style URL:er |
+
+> Tips: Om du kör lokalt mot MinIO kan du sätta `S3_ENDPOINT=http://localhost:9000`, `S3_FORCE_PATH_STYLE=true` och `S3_PUBLIC_URL=http://localhost:9000/<bucket>` för att kunna förhandsgranska bilderna.
+
+Om `S3_BUCKET` eller `S3_REGION` utelämnas faller uppladdningar tillbaka till ett inaktiverat läge och backend returnerar ett tydligt fel när en bild skickas med.
+
 ## Nästa steg
 
-- Koppla på bilduppladdning och analys via t.ex. OpenAI Vision eller Google Cloud Vision.
+- Lägg till automatisk bildanalys (OpenAI Vision eller Google Cloud Vision) ovanpå den nya S3-uppladdningen.
 - Lägg till geodata (Google Places, Trafiklab) och injicera i textgenereringen.
 - Bygg modulär texteditor med sektioner (Inledning, Hall, Kök, Område) och omskrivningar per sektion.
 - Lägg till autentisering och rollhantering för mäklarbyråer.
@@ -114,4 +133,3 @@ Exempelpayload för `POST /api/listings/`:
    ```
 
 Om du arbetar via en feature-branch, skapa en PR mot `main` när pushen är klar.
-

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -21,8 +22,8 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 	}
 
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO listings (id, address, tone, target_audience, highlights, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.CreatedAt); err != nil {
+		`INSERT INTO listings (id, address, tone, target_audience, highlights, image_url, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.CreatedAt); err != nil {
 		return Listing{}, fmt.Errorf("insert listing: %w", err)
 	}
 
@@ -31,7 +32,7 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 
 // ListListings returns a slice of the most recent listings.
 func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
+	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
 	if err != nil {
 		return nil, fmt.Errorf("query listings: %w", err)
 	}
@@ -39,12 +40,18 @@ func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
 
 	listings := []Listing{}
 	for rows.Next() {
-		var item Listing
-		if err := rows.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &item.CreatedAt); err != nil {
+		var (
+			item     Listing
+			imageURL sql.NullString
+		)
+		if err := rows.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &item.CreatedAt); err != nil {
 			if err == pgx.ErrNoRows {
 				break
 			}
 			return nil, fmt.Errorf("scan listing: %w", err)
+		}
+		if imageURL.Valid {
+			item.ImageURL = imageURL.String
 		}
 		listings = append(listings, item)
 	}

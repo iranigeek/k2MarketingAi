@@ -10,6 +10,7 @@ import (
 
 	"k2MarketingAi/internal/config"
 	"k2MarketingAi/internal/listings"
+	"k2MarketingAi/internal/media"
 	"k2MarketingAi/internal/server"
 	"k2MarketingAi/internal/storage"
 )
@@ -24,7 +25,19 @@ func main() {
 	}
 	defer store.Close()
 
-	listingHandler := listings.Handler{Store: store}
+	uploader, err := media.NewUploader(ctx, media.Config{
+		Bucket:         cfg.Media.Bucket,
+		Region:         cfg.Media.Region,
+		Endpoint:       cfg.Media.Endpoint,
+		PublicURL:      cfg.Media.PublicURL,
+		KeyPrefix:      cfg.Media.KeyPrefix,
+		ForcePathStyle: cfg.Media.ForcePathStyle,
+	})
+	if err != nil {
+		log.Fatalf("failed to init media uploader: %v", err)
+	}
+
+	listingHandler := listings.Handler{Store: store, Uploader: uploader}
 
 	staticFS := http.FileServer(http.Dir("web"))
 	srv := server.New(cfg.Port, listingHandler, staticFS)

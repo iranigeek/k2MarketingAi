@@ -58,6 +58,13 @@ label {
     font-weight: 600;
 }
 
+small.help-text {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 input, select, button {
     width: 100%;
     padding: 0.75rem 0.9rem;
@@ -110,6 +117,14 @@ button.secondary {
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 0.9rem 1rem;
+}
+
+.list__image {
+    width: 100%;
+    border-radius: 10px;
+    margin-top: 0.75rem;
+    object-fit: cover;
+    max-height: 220px;
 }
 
 .list__item h3 {
