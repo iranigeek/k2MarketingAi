@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-assistent för Objektbeskrivningar</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header class="hero">
+        <div class="hero__content">
+            <h1>Skapa säljande texter på under en minut</h1>
+            <p>Testa flödet: lägg till en adress, välj tonalitet och skicka in.</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>Starta ett nytt objekt</h2>
+            <form id="listing-form">
+                <label for="address">Adress</label>
+                <input id="address" name="address" type="text" placeholder="Ex. Skolgatan 12" required>
+
+                <label for="tone">Tone of Voice</label>
+                <select id="tone" name="tone">
+                    <option value="Exklusiv och sofistikerad">Exklusiv och sofistikerad</option>
+                    <option value="Varm och familjär" selected>Varm och familjär</option>
+                    <option value="Urban och trendig">Urban och trendig</option>
+                </select>
+
+                <label for="audience">Målgrupp</label>
+                <input id="audience" name="audience" type="text" placeholder="Barnfamiljer, förstagångsköpare...">
+
+                <label for="highlights">Viktiga säljargument (komma-separerade)</label>
+                <input id="highlights" name="highlights" type="text" placeholder="Låg avgift, balkong i söderläge">
+
+                <button type="submit">Skapa utkast</button>
+                <p id="form-message" role="status"></p>
+            </form>
+        </section>
+
+        <section class="card">
+            <div class="card__header">
+                <h2>Senaste objekt</h2>
+                <button id="refresh-btn" class="secondary">Uppdatera</button>
+            </div>
+            <ul id="listing-list" class="list"></ul>
+        </section>
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>

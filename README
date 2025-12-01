@@ -1,1 +1,117 @@
-Create article for objects, easy and fast. 
+# K2 Marketing AI (Mäklarassistent)
+
+En Go-baserad grund för att snabbt komma igång med en AI-driven plattform som genererar objektbeskrivningar för fastighetsmäklare. Projektet innehåller:
+
+- HTTP-API i Go (chi) med stöd för in-memory lagring eller PostgreSQL.
+- Enkel frontend i HTML/CSS/JS som anropar API:et.
+- Grundläggande datamodell för objekt (adress, tonalitet, målgrupp, highlights).
+
+## Snabbstart
+
+1. **Installera Go 1.21+** och klona repot.
+2. **Kör backend med in-memory lagring** (ingen databas behövs initialt):
+
+   ```bash
+   APP_PORT=8080 go run ./cmd/api
+   ```
+
+3. Öppna `http://localhost:8080` och testa flödet genom formuläret.
+
+> Tips: Om din miljö blockar den publika Go-proxyn, kör `GOPROXY=direct go mod tidy` en gång för att ladda ner moduler och generera `go.sum`.
+
+## Anslut till PostgreSQL
+
+När du har en databas (t.ex. på en VPS):
+
+```bash
+export DATABASE_URL="postgres://user:password@host:5432/dbname?sslmode=disable"
+APP_PORT=8080 go run ./cmd/api
+```
+
+- Vid start skapas tabellen `listings` automatiskt om den saknas.
+- API:t behåller samma kontrakt; frontend listar de senaste objekten (max 50).
+
+### Köra PostgreSQL lokalt (utan VPS)
+
+1. Starta en lokal instans med Docker (standardlösenord `postgres`):
+
+   ```bash
+   docker run --name k2-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16
+   ```
+
+2. Skapa en tom databas:
+
+   ```bash
+   docker exec -it k2-postgres createdb -U postgres k2db
+   ```
+
+3. Exportera anslutningssträngen och kör backend mot den lokala databasen:
+
+   ```bash
+   export DATABASE_URL="postgres://postgres:postgres@localhost:5432/k2db?sslmode=disable"
+   APP_PORT=8080 go run ./cmd/api
+   ```
+
+4. Bekräfta att API:t fungerar:
+
+   ```bash
+   curl http://localhost:8080/health
+   ```
+
+## API-ändpunkter
+
+- `GET /health` – enkel hälsokontroll.
+- `GET /api/listings/` – listar senast skapade objekt.
+- `POST /api/listings/` – skapar ett nytt objekt.
+
+Exempelpayload för `POST /api/listings/`:
+
+```json
+{
+  "address": "Skolgatan 12",
+  "tone": "Exklusiv och sofistikerad",
+  "target_audience": "Barnfamiljer",
+  "highlights": ["Låg avgift", "Balkong i söderläge"]
+}
+```
+
+## Nästa steg
+
+- Koppla på bilduppladdning och analys via t.ex. OpenAI Vision eller Google Cloud Vision.
+- Lägg till geodata (Google Places, Trafiklab) och injicera i textgenereringen.
+- Bygg modulär texteditor med sektioner (Inledning, Hall, Kök, Område) och omskrivningar per sektion.
+- Lägg till autentisering och rollhantering för mäklarbyråer.
+
+## Utvecklingsnotiser
+
+- Kodstil: standard Go-format (`go fmt ./...`).
+- Frontend: vanilla HTML/CSS/JS för enkelhet; byt gärna till React/Svelte när behovet växer.
+
+## Så committar du till `main`
+
+1. Kontrollera status:
+
+   ```bash
+   git status
+   ```
+
+2. Lägg till ändringar:
+
+   ```bash
+   git add .
+   ```
+
+3. Skriv ett beskrivande commitmeddelande och committa till aktuell branch (`main` om du jobbar där):
+
+   ```bash
+   git commit -m "Beskrivande meddelande"
+   ```
+
+4. Tryck upp till GitHub (ersätt `origin` om du använder annat remote-namn):
+
+   ```bash
+   git push origin main
+   ```
+
+Om du arbetar via en feature-branch, skapa en PR mot `main` när pushen är klar.
+
