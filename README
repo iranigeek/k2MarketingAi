@@ -119,7 +119,7 @@ Backend skapar nu strukturerade sektioner (Inledning, Hall, Kök, Vardagsrum, Om
 
 Varje sektion har även snabbkommandon (chips) med vanliga promptar – ett klick skickar en färdig instruktion så mäklaren slipper skriva själv. Alla sektioner sammanfogas automatiskt till `full_copy`, som visas i “Samlad text”-rutan och kan kopieras/exporteras.
 
-Sektionerna är flexibla: ange en valfri array i `sections` när du skapar en listing, eller lägg till/ta bort dem direkt i UI:t (lägg till-knappen genererar nya block, papperskorgen tar bort). Statuspanelen i detaljvyn visar pipeline-steg (Datainsamling, Bildunderlag, Geodata, Text) baserat på backend-fältet `status`. Knappfältet erbjuder:
+Sektionerna är flexibla: ange en valfri array i `sections` när du skapar en listing, eller lägg till/ta bort dem direkt i UI:t (lägg till-knappen genererar nya block, papperskorgen tar bort). Geodata samlas nu in per kategori (matbutiker, restauranger, park, gym, transit) och sammanfattas i området-sektionen i stället för en rå lista. Statuspanelen i detaljvyn visar pipeline-steg (Datainsamling, Bildunderlag, Geodata, Text) baserat på backend-fältet `status`. Knappfältet erbjuder:
 
 - `Kopiera text` – ren text (`full_copy`)
 - `Exportera HTML` – samma text som `<p>`-block (Hemnet/portaler)

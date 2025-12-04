@@ -91,16 +91,47 @@ func buildLivingCopy(listing storage.Listing) string {
 }
 
 func buildAreaCopy(listing storage.Listing) string {
-	if len(listing.Insights.Geodata.PointsOfInterest) == 0 {
+	geo := listing.Insights.Geodata
+	if len(geo.PointsOfInterest) == 0 && len(geo.Transit) == 0 {
 		return "Området erbjuder närhet till vardagens alla måsten – service, grönområden och kommunikationer inom bekvämt gångavstånd."
 	}
-	points := listing.Insights.Geodata.PointsOfInterest
-	var highlights []string
-	for i := 0; i < len(points) && i < 3; i++ {
-		p := points[i]
-		highlights = append(highlights, fmt.Sprintf("%s (%s, %s)", p.Name, p.Category, p.Distance))
+
+	grouped := map[string][]string{}
+	for _, poi := range geo.PointsOfInterest {
+		key := categorizePOI(poi.Category)
+		entry := fmt.Sprintf("%s (%s)", poi.Name, poi.Distance)
+		grouped[key] = append(grouped[key], entry)
 	}
-	return fmt.Sprintf("Utanför porten väntar ett kvarter fyllt av favoriter som %s. Perfekt läge för dig som vill ha både puls och rekreation nära hemmet.", strings.Join(highlights, ", "))
+
+	var sentences []string
+	if names := summarizeList(grouped["grocery"], 2); names != "" {
+		sentences = append(sentences, fmt.Sprintf("Matbutiker som %s ligger bara några minuter bort.", names))
+	}
+	if names := summarizeList(append(grouped["restaurant"], grouped["cafe"]...), 2); names != "" {
+		sentences = append(sentences, fmt.Sprintf("I kvarteret väntar restauranger och caféer som %s.", names))
+	}
+	if names := summarizeList(grouped["park"], 2); names != "" {
+		sentences = append(sentences, fmt.Sprintf("För rekreation finns gröna platser som %s.", names))
+	}
+	if names := summarizeList(grouped["gym"], 1); names != "" {
+		sentences = append(sentences, fmt.Sprintf("Den som vill träna gör det enkelt på %s.", names))
+	}
+
+	if len(geo.Transit) > 0 {
+		var highlights []string
+		for i := 0; i < len(geo.Transit) && i < 2; i++ {
+			highlights = append(highlights, fmt.Sprintf("%s (%s)", geo.Transit[i].Mode, geo.Transit[i].Description))
+		}
+		if summary := summarizeList(highlights, len(highlights)); summary != "" {
+			sentences = append(sentences, fmt.Sprintf("Kommunikationerna är utmärkta med %s.", summary))
+		}
+	}
+
+	if len(sentences) == 0 {
+		return "Området erbjuder närhet till vardagens alla måsten – service, grönområden och kommunikationer inom bekvämt gångavstånd."
+	}
+
+	return strings.Join(sentences, " ")
 }
 
 func emphasizeInstruction(target string) string {
@@ -125,6 +156,37 @@ func formatRooms(rooms float64) string {
 		return fmt.Sprintf("%d", int(rooms))
 	}
 	return fmt.Sprintf("%.1f", rooms)
+}
+
+func categorizePOI(category string) string {
+	switch strings.ToLower(category) {
+	case "matbutik", "butik":
+		return "grocery"
+	case "restaurang":
+		return "restaurant"
+	case "café":
+		return "cafe"
+	case "park":
+		return "park"
+	case "gym":
+		return "gym"
+	default:
+		return "other"
+	}
+}
+
+func summarizeList(items []string, limit int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	last := items[len(items)-1]
+	return fmt.Sprintf("%s och %s", strings.Join(items[:len(items)-1], ", "), last)
 }
 
 // NewOpenAI wires the generator to OpenAI's chat completions.
