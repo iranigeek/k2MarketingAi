@@ -9,17 +9,49 @@
 <body>
     <header class="hero">
         <div class="hero__content">
-            <h1>Skapa säljande texter på under en minut</h1>
-            <p>Testa flödet: lägg till en adress, välj tonalitet och skicka in.</p>
+            <p class="eyebrow">Automatiserad Content-plattform</p>
+            <h1>Allt en mäklare behöver för att få texter på sekunder</h1>
+            <p>AI assisterar med bildtolkning, geodata och modulära sektioner så att du kan fokusera på relationerna.</p>
+        </div>
+        <div class="hero__stats">
+            <div>
+                <h3>60s</h3>
+                <p>Från adress till publiceringsklart utkast.</p>
+            </div>
+            <div>
+                <h3>5 st</h3>
+                <p>Fördefinierade sektioner redo för omskrivning.</p>
+            </div>
+            <div>
+                <h3>100%</h3>
+                <p>Kontroll – AI föreslår, mäklaren justerar.</p>
+            </div>
         </div>
     </header>
 
-    <main class="container">
-        <section class="card">
-            <h2>Starta ett nytt objekt</h2>
+    <section class="features">
+        <article>
+            <h3>Bild → Text</h3>
+            <p>Drag-n-drop dina mäklarbilder och låt visionmodellen lyfta fram material, ljus och detaljer.</p>
+        </article>
+        <article>
+            <h3>Geodata</h3>
+            <p>Google Places + Trafikdata ger realistiska avstånd, skolor och vardagsfavoriter – utan research.</p>
+        </article>
+        <article>
+            <h3>Modulär editor</h3>
+            <p>Omskriv varje sektion med egna instruktioner. LLM:n svarar på sekunder och sparar historiken.</p>
+        </article>
+    </section>
+
+    <main class="workspace">
+        <section class="panel">
+            <div class="panel__header">
+                <h2>Nytt objekt</h2>
+            </div>
             <form id="listing-form">
                 <label for="address">Adress</label>
-                <input id="address" name="address" type="text" placeholder="Ex. Skolgatan 12" required>
+                <input id="address" name="address" type="text" placeholder="Ex. Skolgatan 12, Stockholm" required>
 
                 <label for="tone">Tone of Voice</label>
                 <select id="tone" name="tone">
@@ -53,14 +85,33 @@
                 <button type="submit">Skapa utkast</button>
                 <p id="form-message" role="status"></p>
             </form>
-        </section>
 
-        <section class="card">
-            <div class="card__header">
-                <h2>Senaste objekt</h2>
+            <div class="panel__header panel__header--list">
+                <h2>Mina objekt</h2>
                 <button id="refresh-btn" class="secondary">Uppdatera</button>
             </div>
             <ul id="listing-list" class="list"></ul>
+        </section>
+
+        <section class="detail card" id="detail-panel">
+            <div class="detail__header">
+                <div>
+                    <p class="eyebrow">Detaljvy</p>
+                    <h2 id="detail-address">Välj ett objekt för att visa detaljer</h2>
+                    <p id="detail-meta"></p>
+                    <div class="status-pills" id="detail-status"></div>
+                </div>
+                <div class="detail__actions">
+                    <button class="secondary danger" id="delete-listing-btn" disabled>Ta bort objekt</button>
+                    <button class="secondary" id="copy-text-btn" disabled>Kopiera text</button>
+                    <button class="secondary" id="copy-html-btn" disabled>Exportera HTML</button>
+                    <button class="secondary" id="download-txt-btn" disabled>Ladda ner TXT</button>
+                    <button class="secondary" id="add-section-btn" disabled>+ Lägg till sektion</button>
+                </div>
+            </div>
+            <div id="detail-body" class="detail__body">
+                <p class="muted">När du väljer ett objekt visas sektionerna här med möjlighet att omskriva respektive del.</p>
+            </div>
         </section>
     </main>
 

@@ -2,11 +2,15 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrNotFound indicates that a listing could not be located in the backing store.
+var ErrNotFound = errors.New("listing not found")
 
 // Listing represents the metadata and generated insights for a real estate listing.
 type Listing struct {
@@ -20,6 +24,9 @@ type Listing struct {
 	LivingArea     float64   `json:"living_area,omitempty"`
 	Rooms          float64   `json:"rooms,omitempty"`
 	Sections       []Section `json:"sections,omitempty"`
+	FullCopy       string    `json:"full_copy,omitempty"`
+	History        History   `json:"section_history,omitempty"`
+	Status         Status    `json:"status,omitempty"`
 	Insights       Insights  `json:"insights,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
@@ -34,6 +41,25 @@ type Section struct {
 // Insights aggregates AI/automation derived metadata for a listing.
 type Insights struct {
 	Geodata GeodataInsights `json:"geodata,omitempty"`
+}
+
+// Status represents pipeline progress for the listing.
+type Status struct {
+	Data    string `json:"data"`
+	Vision  string `json:"vision"`
+	Geodata string `json:"geodata"`
+	Text    string `json:"text"`
+}
+
+// History maps section slugs to previous versions.
+type History map[string][]SectionVersion
+
+// SectionVersion tracks historical changes to a section.
+type SectionVersion struct {
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	Source    string    `json:"source"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // GeodataInsights contains contextual information about the neighborhood.
@@ -59,6 +85,10 @@ type TransitInfo struct {
 type Store interface {
 	CreateListing(ctx context.Context, input Listing) (Listing, error)
 	ListListings(ctx context.Context) ([]Listing, error)
+	GetListing(ctx context.Context, id string) (Listing, error)
+	UpdateListingSections(ctx context.Context, id string, sections []Section, fullCopy string, history History, status Status) (Listing, error)
+	UpdateStatus(ctx context.Context, id string, status Status) error
+	DeleteListing(ctx context.Context, id string) error
 	Close()
 }
 
@@ -96,10 +126,13 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
         image_url TEXT,
         fee INTEGER,
         living_area DOUBLE PRECISION,
-        rooms DOUBLE PRECISION,
-        sections JSONB DEFAULT '[]'::jsonb,
-        insights JSONB DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		rooms DOUBLE PRECISION,
+		sections JSONB DEFAULT '[]'::jsonb,
+        full_copy TEXT,
+        section_history JSONB DEFAULT '{}'::jsonb,
+        pipeline_status JSONB DEFAULT '{}'::jsonb,
+		insights JSONB DEFAULT '{}'::jsonb,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`)
 	if err != nil {
 		return fmt.Errorf("create listings table: %w", err)
@@ -111,6 +144,9 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS living_area DOUBLE PRECISION`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS rooms DOUBLE PRECISION`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS sections JSONB DEFAULT '[]'::jsonb`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS full_copy TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS section_history JSONB DEFAULT '{}'::jsonb`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS pipeline_status JSONB DEFAULT '{}'::jsonb`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS insights JSONB DEFAULT '{}'::jsonb`,
 	}
 	for _, stmt := range schemaAlters {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"k2MarketingAi/internal/storage"
@@ -26,6 +27,7 @@ const (
 type Config struct {
 	GooglePlacesAPIKey string
 	TrafficAPIKey      string
+	CacheTTL           time.Duration
 }
 
 // Provider fetches contextual geodata for an address.
@@ -54,14 +56,73 @@ type TransitSummary struct {
 
 // NewProvider wires a provider implementation based on the config.
 func NewProvider(cfg Config) Provider {
+	var base Provider
 	if cfg.GooglePlacesAPIKey == "" {
-		return &staticProvider{}
+		base = &staticProvider{}
+	} else {
+		base = &googleProvider{
+			apiKey: cfg.GooglePlacesAPIKey,
+			client: &http.Client{Timeout: 6 * time.Second},
+		}
 	}
 
-	return &googleProvider{
-		apiKey: cfg.GooglePlacesAPIKey,
-		client: &http.Client{Timeout: 6 * time.Second},
+	return wrapWithCache(base, cfg.CacheTTL)
+}
+
+func wrapWithCache(base Provider, ttl time.Duration) Provider {
+	if ttl <= 0 {
+		return base
 	}
+
+	return &cachedProvider{
+		base:    base,
+		ttl:     ttl,
+		entries: make(map[string]cacheEntry),
+	}
+}
+
+type cachedProvider struct {
+	base    Provider
+	ttl     time.Duration
+	mu      sync.RWMutex
+	entries map[string]cacheEntry
+}
+
+type cacheEntry struct {
+	summary Summary
+	expires time.Time
+}
+
+func (c *cachedProvider) Fetch(ctx context.Context, address string) (Summary, error) {
+	key := normalizeAddress(address)
+	now := time.Now()
+
+	c.mu.RLock()
+	if entry, ok := c.entries[key]; ok && entry.expires.After(now) {
+		c.mu.RUnlock()
+		return entry.summary, nil
+	}
+	c.mu.RUnlock()
+
+	summary, err := c.base.Fetch(ctx, address)
+	if err != nil {
+		return Summary{}, err
+	}
+
+	c.mu.Lock()
+	c.entries[key] = cacheEntry{
+		summary: summary,
+		expires: now.Add(c.ttl),
+	}
+	c.mu.Unlock()
+
+	return summary, nil
+}
+
+func normalizeAddress(address string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(address))
+	parts := strings.Fields(trimmed)
+	return strings.Join(parts, " ")
 }
 
 type googleProvider struct {

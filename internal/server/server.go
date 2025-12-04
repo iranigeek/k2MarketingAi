@@ -28,7 +28,16 @@ func New(port string, listingHandler listings.Handler, staticFS http.Handler) *h
 		r.Route("/listings", func(r chi.Router) {
 			r.Get("/", listingHandler.List)
 			r.Post("/", listingHandler.Create)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", listingHandler.Get)
+				r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
+				r.Patch("/sections/{slug}", listingHandler.UpdateSection)
+				r.Delete("/sections/{slug}", listingHandler.DeleteSection)
+				r.Get("/export", listingHandler.ExportFullCopy)
+				r.Delete("/", listingHandler.DeleteListing)
+			})
 		})
+		r.Get("/events", listingHandler.StreamEvents)
 	})
 
 	// Serve the static frontend

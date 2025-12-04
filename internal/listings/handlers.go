@@ -2,6 +2,7 @@ package listings
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
+	"k2MarketingAi/internal/events"
+	"k2MarketingAi/internal/generation"
 	"k2MarketingAi/internal/geodata"
 	"k2MarketingAi/internal/media"
 	"k2MarketingAi/internal/storage"
@@ -26,19 +31,29 @@ type Handler struct {
 	Store       storage.Store
 	Uploader    media.Uploader
 	GeoProvider geodata.Provider
+	Generator   generation.Generator
+	Events      *events.Broker
 }
 
 // CreateListingRequest describes inbound payload for creating a listing.
 type CreateListingRequest struct {
-	Address        string   `json:"address"`
-	Tone           string   `json:"tone"`
-	TargetAudience string   `json:"target_audience"`
-	Highlights     []string `json:"highlights"`
-	ImageURL       string   `json:"image_url,omitempty"`
-	Fee            int      `json:"fee"`
-	LivingArea     float64  `json:"living_area"`
-	Rooms          float64  `json:"rooms"`
-	Instructions   string   `json:"instructions"`
+	Address        string         `json:"address"`
+	Tone           string         `json:"tone"`
+	TargetAudience string         `json:"target_audience"`
+	Highlights     []string       `json:"highlights"`
+	ImageURL       string         `json:"image_url,omitempty"`
+	Fee            int            `json:"fee"`
+	LivingArea     float64        `json:"living_area"`
+	Rooms          float64        `json:"rooms"`
+	Instructions   string         `json:"instructions"`
+	Sections       []SectionInput `json:"sections"`
+}
+
+// SectionInput allows custom section configuration from the client.
+type SectionInput struct {
+	Slug    string `json:"slug"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
 }
 
 type uploadPayload struct {
@@ -114,7 +129,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Fee:            req.Fee,
 		LivingArea:     req.LivingArea,
 		Rooms:          req.Rooms,
-		Sections:       buildDefaultSections(req, imageURL),
+		Sections:       buildSectionsFromInput(req, imageURL),
+		History:        storage.History{},
 		Insights:       storage.Insights{},
 		CreatedAt:      time.Now(),
 	}
@@ -127,11 +143,24 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if h.Generator != nil {
+		if sections, genErr := h.Generator.Generate(r.Context(), listing); genErr == nil {
+			listing.Sections = sections
+		} else {
+			log.Printf("generator failed, using fallback sections: %v", genErr)
+		}
+	}
+	recordHistoryForAll(&listing, "generate")
+	listing.FullCopy = composeFullCopy(listing.Sections)
+	deriveStatus(&listing)
+
 	listing, err = h.Store.CreateListing(r.Context(), listing)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.publishListing(listing)
+	go h.runPipeline(listing)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -148,6 +177,303 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(listings)
+}
+
+// Get returns a single listing by id.
+func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.Store.GetListing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(listing)
+}
+
+// RewriteSection accepts instructions and rewrites a section using the generator.
+func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	slug := chi.URLParam(r, "slug")
+	if id == "" || slug == "" {
+		http.Error(w, "id and slug are required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Instruction string `json:"instruction"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.Store.GetListing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	idx := findSectionIndex(listing.Sections, slug)
+	if idx == -1 {
+		http.Error(w, "section not found", http.StatusNotFound)
+		return
+	}
+
+	section := listing.Sections[idx]
+	fallbackUsed := false
+	if h.Generator != nil {
+		if updated, genErr := h.Generator.Rewrite(r.Context(), listing, section, req.Instruction); genErr == nil {
+			section = updated
+		} else {
+			log.Printf("rewrite fallback: %v", genErr)
+			fallbackUsed = true
+			section.Content = section.Content + "\n\n" + strings.TrimSpace(req.Instruction)
+		}
+	} else if req.Instruction != "" {
+		section.Content = section.Content + "\n\n" + strings.TrimSpace(req.Instruction)
+	}
+
+	listing.Sections[idx] = section
+	addHistoryEntry(&listing, section, "rewrite")
+	listing.FullCopy = composeFullCopy(listing.Sections)
+	deriveStatus(&listing)
+	updated, err := h.Store.UpdateListingSections(r.Context(), id, listing.Sections, listing.FullCopy, listing.History, listing.Status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if fallbackUsed {
+		w.Header().Set("X-Generator-Fallback", "1")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+	h.publishListing(updated)
+}
+
+// UpdateSection saves manual edits for a section.
+func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	slug := chi.URLParam(r, "slug")
+	if id == "" || slug == "" {
+		http.Error(w, "id and slug are required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.Title = strings.TrimSpace(req.Title)
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Content == "" {
+		http.Error(w, "content cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.Store.GetListing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	idx := findSectionIndex(listing.Sections, slug)
+	if idx == -1 {
+		newSection := storage.Section{
+			Slug:    slug,
+			Title:   req.Title,
+			Content: req.Content,
+		}
+		listing.Sections = append(listing.Sections, newSection)
+		addHistoryEntry(&listing, newSection, "manual")
+	} else {
+		if req.Title != "" {
+			listing.Sections[idx].Title = req.Title
+		}
+		listing.Sections[idx].Content = req.Content
+		addHistoryEntry(&listing, listing.Sections[idx], "manual")
+	}
+
+	listing.FullCopy = composeFullCopy(listing.Sections)
+	deriveStatus(&listing)
+	updated, err := h.Store.UpdateListingSections(r.Context(), id, listing.Sections, listing.FullCopy, listing.History, listing.Status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+	h.publishListing(updated)
+}
+
+// DeleteSection removes a section by slug.
+func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	slug := chi.URLParam(r, "slug")
+	if id == "" || slug == "" {
+		http.Error(w, "id and slug are required", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.Store.GetListing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	idx := findSectionIndex(listing.Sections, slug)
+	if idx == -1 {
+		http.Error(w, "section not found", http.StatusNotFound)
+		return
+	}
+
+	listing.History[slug] = append([]storage.SectionVersion{{
+		Title:     listing.Sections[idx].Title,
+		Content:   listing.Sections[idx].Content,
+		Source:    "delete",
+		Timestamp: time.Now(),
+	}}, listing.History[slug]...)
+
+	listing.Sections = append(listing.Sections[:idx], listing.Sections[idx+1:]...)
+	listing.FullCopy = composeFullCopy(listing.Sections)
+	deriveStatus(&listing)
+
+	updated, err := h.Store.UpdateListingSections(r.Context(), id, listing.Sections, listing.FullCopy, listing.History, listing.Status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+	h.publishListing(updated)
+}
+
+// ExportFullCopy returns the listing text in different formats (text/html).
+func (h Handler) ExportFullCopy(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.Store.GetListing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fullCopy := listing.FullCopy
+	if fullCopy == "" && len(listing.Sections) > 0 {
+		fullCopy = composeFullCopy(listing.Sections)
+	}
+
+	format := r.URL.Query().Get("format")
+	switch strings.ToLower(format) {
+	case "html":
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		for _, block := range strings.Split(fullCopy, "\n\n") {
+			block = strings.TrimSpace(block)
+			if block == "" {
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "<p>%s</p>\n", strings.ReplaceAll(block, "\n", " "))
+		}
+	default:
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(fullCopy))
+	}
+}
+
+// DeleteListing removes an entire listing.
+func (h Handler) DeleteListing(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.Store.DeleteListing(r.Context(), id); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.publishDeletion(id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// StreamEvents streams status updates over SSE.
+func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
+	if h.Events == nil {
+		http.Error(w, "event streaming disabled", http.StatusNotImplemented)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	ch := h.Events.Subscribe()
+	defer h.Events.Unsubscribe(ch)
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case evt, ok := <-ch:
+			if !ok {
+				return
+			}
+			payload, err := json.Marshal(evt)
+			if err != nil {
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "event: status\ndata: %s\n\n", payload)
+			flusher.Flush()
+		}
+	}
 }
 
 func parseMultipartRequest(r *http.Request) (CreateListingRequest, *uploadPayload, error) {
@@ -251,6 +577,49 @@ func buildDefaultSections(req CreateListingRequest, imageURL string) []storage.S
 	}
 }
 
+func buildSectionsFromInput(req CreateListingRequest, imageURL string) []storage.Section {
+	if len(req.Sections) == 0 {
+		return buildDefaultSections(req, imageURL)
+	}
+
+	sections := make([]storage.Section, 0, len(req.Sections))
+	seen := map[string]bool{}
+
+	for _, s := range req.Sections {
+		slug := strings.TrimSpace(s.Slug)
+		if slug == "" {
+			continue
+		}
+		if seen[slug] {
+			continue
+		}
+		seen[slug] = true
+
+		title := strings.TrimSpace(s.Title)
+		if title == "" {
+			title = strings.Title(slug)
+		}
+		content := strings.TrimSpace(s.Content)
+		if content == "" && slug == "intro" {
+			content = buildIntro(req, imageURL)
+		} else if content == "" {
+			content = "Text genereras vid behov."
+		}
+
+		sections = append(sections, storage.Section{
+			Slug:    slug,
+			Title:   title,
+			Content: content,
+		})
+	}
+
+	if len(sections) == 0 {
+		return buildDefaultSections(req, imageURL)
+	}
+
+	return sections
+}
+
 func buildIntro(req CreateListingRequest, imageURL string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Välkommen till %s – en bostad som kombinerar ", req.Address)
@@ -265,4 +634,152 @@ func buildIntro(req CreateListingRequest, imageURL string) string {
 		fmt.Fprintf(&b, " Highlights: %s.", strings.Join(req.Highlights, ", "))
 	}
 	return b.String()
+}
+
+func findSectionIndex(sections []storage.Section, slug string) int {
+	for i, section := range sections {
+		if section.Slug == slug {
+			return i
+		}
+	}
+	return -1
+}
+
+func composeFullCopy(sections []storage.Section) string {
+	parts := make([]string, 0, len(sections))
+	for _, section := range sections {
+		content := strings.TrimSpace(section.Content)
+		if content == "" {
+			continue
+		}
+		title := strings.TrimSpace(section.Title)
+		if title != "" {
+			parts = append(parts, fmt.Sprintf("%s\n%s", title, content))
+		} else {
+			parts = append(parts, content)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func recordHistoryForAll(listing *storage.Listing, source string) {
+	for _, section := range listing.Sections {
+		addHistoryEntry(listing, section, source)
+	}
+}
+
+func addHistoryEntry(listing *storage.Listing, section storage.Section, source string) {
+	if listing.History == nil {
+		listing.History = storage.History{}
+	}
+	if section.Slug == "" {
+		return
+	}
+	entry := storage.SectionVersion{
+		Title:     section.Title,
+		Content:   section.Content,
+		Source:    source,
+		Timestamp: time.Now(),
+	}
+	entries := listing.History[section.Slug]
+	entries = append([]storage.SectionVersion{entry}, entries...)
+	if len(entries) > 5 {
+		entries = entries[:5]
+	}
+	listing.History[section.Slug] = entries
+}
+
+func deriveStatus(listing *storage.Listing) {
+	status := listing.Status
+	if status.Data == "" {
+		status.Data = "completed"
+	}
+
+	if listing.ImageURL == "" {
+		status.Vision = "skipped"
+	} else if status.Vision == "" {
+		status.Vision = "pending"
+	}
+
+	if len(listing.Insights.Geodata.PointsOfInterest) > 0 {
+		status.Geodata = "completed"
+	} else if status.Geodata == "" {
+		status.Geodata = "pending"
+	}
+
+	fullCopy := strings.TrimSpace(listing.FullCopy)
+	if fullCopy != "" {
+		status.Text = "completed"
+	} else if status.Text == "" {
+		status.Text = "pending"
+	}
+
+	listing.Status = status
+}
+
+func (h Handler) runPipeline(initial storage.Listing) {
+	if h.Store == nil {
+		return
+	}
+
+	ctx := context.Background()
+	status := initial.Status
+
+	if initial.ImageURL != "" && status.Vision != "completed" {
+		status.Vision = "in_progress"
+		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+		h.publishStatus(initial.ID, status)
+		time.Sleep(1500 * time.Millisecond)
+		status.Vision = "completed"
+	}
+
+	if status.Geodata != "completed" {
+		status.Geodata = "in_progress"
+		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+		h.publishStatus(initial.ID, status)
+		time.Sleep(1200 * time.Millisecond)
+		status.Geodata = "completed"
+	}
+
+	if status.Text != "completed" {
+		status.Text = "in_progress"
+		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+		h.publishStatus(initial.ID, status)
+		time.Sleep(800 * time.Millisecond)
+		status.Text = "completed"
+	}
+
+	status.Data = "completed"
+	_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+	h.publishStatus(initial.ID, status)
+}
+
+func (h Handler) publishListing(listing storage.Listing) {
+	if h.Events == nil {
+		return
+	}
+	h.Events.Publish(events.Event{
+		ListingID: listing.ID,
+		Status:    listing.Status,
+	})
+}
+
+func (h Handler) publishStatus(listingID string, status storage.Status) {
+	if h.Events == nil {
+		return
+	}
+	h.Events.Publish(events.Event{
+		ListingID: listingID,
+		Status:    status,
+	})
+}
+
+func (h Handler) publishDeletion(id string) {
+	if h.Events == nil {
+		return
+	}
+	h.Events.Publish(events.Event{
+		ListingID: id,
+		Status:    storage.Status{Data: "deleted"},
+	})
 }

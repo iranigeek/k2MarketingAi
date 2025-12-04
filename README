@@ -9,13 +9,22 @@ En Go-baserad grund för att snabbt komma igång med en AI-driven plattform som 
 ## Snabbstart
 
 1. **Installera Go 1.21+** och klona repot.
-2. **Kör backend med in-memory lagring** (ingen databas behövs initialt):
+2. **Skapa din `config.json`** genom att kopiera `config.example.json` och fylla i värden (OpenAI-nyckel, ev. S3/DB):
 
    ```bash
-   APP_PORT=8080 go run ./cmd/api
+   cp config.example.json config.json
+   # redigera config.json och klistra in dina nycklar
    ```
 
-3. Öppna `http://localhost:8080` och testa flödet genom formuläret.
+> Obs! `config.json` är ignorerad av git så att nycklar inte råkar committas.
+
+3. **Kör backend med in-memory lagring** (ingen databas behövs initialt):
+
+   ```bash
+   go run ./cmd/api
+   ```
+
+4. Öppna `http://localhost:8080` och testa flödet genom formuläret.
 
 > Tips: Om din miljö blockar den publika Go-proxyn, kör `GOPROXY=direct go mod tidy` en gång för att ladda ner moduler och generera `go.sum`.
 
@@ -23,10 +32,8 @@ En Go-baserad grund för att snabbt komma igång med en AI-driven plattform som 
 
 När du har en databas (t.ex. på en VPS):
 
-```bash
-export DATABASE_URL="postgres://user:password@host:5432/dbname?sslmode=disable"
-APP_PORT=8080 go run ./cmd/api
-```
+1. Uppdatera `database_url` i `config.json`, exempel:`"database_url": "postgres://user:password@host:5432/dbname?sslmode=disable"`
+2. Kör `go run ./cmd/api`
 
 - Vid start skapas tabellen `listings` automatiskt om den saknas.
 - API:t behåller samma kontrakt; frontend listar de senaste objekten (max 50).
@@ -45,12 +52,7 @@ APP_PORT=8080 go run ./cmd/api
    docker exec -it k2-postgres createdb -U postgres k2db
    ```
 
-3. Exportera anslutningssträngen och kör backend mot den lokala databasen:
-
-   ```bash
-   export DATABASE_URL="postgres://postgres:postgres@localhost:5432/k2db?sslmode=disable"
-   APP_PORT=8080 go run ./cmd/api
-   ```
+3. Sätt `database_url` i `config.json` till `postgres://postgres:postgres@localhost:5432/k2db?sslmode=disable` och starta backend med `go run ./cmd/api`.
 
 4. Bekräfta att API:t fungerar:
 
@@ -63,6 +65,13 @@ APP_PORT=8080 go run ./cmd/api
 - `GET /health` – enkel hälsokontroll.
 - `GET /api/listings/` – listar senast skapade objekt.
 - `POST /api/listings/` – skapar ett nytt objekt.
+- `GET /api/listings/{id}/` – hämtar ett enskilt objekt.
+- `POST /api/listings/{id}/sections/{slug}/rewrite` – omskriver en sektion med en instruktion i request body.
+- `PATCH /api/listings/{id}/sections/{slug}` – sparar manuellt redigerad titel/innehåll för en sektion.
+- `GET /api/listings/{id}/export?format=text|html` – hämtar `full_copy` som ren text (default) eller som enkel HTML.
+- `DELETE /api/listings/{id}/sections/{slug}` – tar bort en sektion (sparas i historiken).
+- `DELETE /api/listings/{id}/` – raderar ett helt objekt.
+- `GET /api/events` – SSE-ström som pushar statusuppdateringar (`status`-event) för alla listings.
 
 Exempelpayload för `POST /api/listings/`:
 
@@ -76,6 +85,7 @@ Exempelpayload för `POST /api/listings/`:
   "living_area": 82,
   "rooms": 3.5,
   "instructions": "Betona balkongen och håll tonen varm.",
+  "full_copy": "",
   "sections": [
     {"slug": "intro", "title": "Inledning", "content": "Inledningstext..."}
   ]
@@ -84,33 +94,58 @@ Exempelpayload för `POST /api/listings/`:
 
 ## Bilduppladdning via S3
 
-Formuläret i webben stöder nu `multipart/form-data` med fältet `photo`. Backend laddar upp filen (max 5 MB, jpg/png) till en S3-kompatibel bucket och sparar URL:en på respektive listing.
+Formuläret i webben stöder nu `multipart/form-data` med fältet `photo`. Om en S3-konfiguration finns laddas filen (max 5 MB, jpg/png) upp till bucketen och URL:en sparas på respektive listing. Saknas S3-uppgifter skrivs filen istället till ett temporärt lokalt katalog (`/tmp`) och raderas manuellt efter att du använt den för analys.
 
-Aktivera genom att exportera följande variabler innan du startar API:t:
+Aktivera genom att sätta följande nycklar i `config.json`:
 
 | Variabel | Beskrivning |
 | --- | --- |
-| `S3_BUCKET` | Namnet på bucketen där bilderna ska sparas (obligatorisk) |
-| `S3_REGION` | AWS-region (obligatorisk) |
-| `S3_KEY_PREFIX` | (Valfri) mapp-prefix, t.ex. `uploads/listings` |
-| `S3_PUBLIC_URL` | (Valfri) Publik bas-URL/CNAME om du serverar via CloudFront el. liknande |
-| `S3_ENDPOINT` | (Valfri) Eget endpoint för S3-kompatibel lagring, används ihop med `S3_FORCE_PATH_STYLE=true` för t.ex. MinIO/Wasabi |
-| `S3_FORCE_PATH_STYLE` | Sätt till `true` om din endpoint kräver path-style URL:er |
+| `media.bucket` | Namnet på bucketen där bilderna ska sparas (obligatorisk) |
+| `media.region` | AWS-region (obligatorisk) |
+| `media.key_prefix` | (Valfri) mapp-prefix, t.ex. `uploads/listings` |
+| `media.public_url` | (Valfri) Publik bas-URL/CNAME om du serverar via CloudFront el. liknande |
+| `media.endpoint` | (Valfri) Eget endpoint för S3-kompatibel lagring, används ihop med `media.force_path_style=true` för t.ex. MinIO/Wasabi |
+| `media.force_path_style` | Sätt till `true` om din endpoint kräver path-style URL:er |
 
 > Tips: Om du kör lokalt mot MinIO kan du sätta `S3_ENDPOINT=http://localhost:9000`, `S3_FORCE_PATH_STYLE=true` och `S3_PUBLIC_URL=http://localhost:9000/<bucket>` för att kunna förhandsgranska bilderna.
+
+Behöver du bara temporär lagring (t.ex. för bildanalys) kan du hoppa över S3-variablerna. Backend sparar då filen lokalt och visar ingen bild-URL i UI:t.
 
 Om `S3_BUCKET` eller `S3_REGION` utelämnas faller uppladdningar tillbaka till ett inaktiverat läge och backend returnerar ett tydligt fel när en bild skickas med.
 
 ## Modulär text & geodata
 
-Backend skapar nu strukturerade sektioner (Inledning, Hall, Kök, Vardagsrum, Område) för varje objekt. Frontend visar dessa sektioner i respektive kort, redo för framtida omskrivningsflöden.
+Backend skapar nu strukturerade sektioner (Inledning, Hall, Kök, Vardagsrum, Område) för varje objekt. Frontend visar dessa sektioner i respektive kort och du kan omskriva dem direkt via “Skriv om”-knappen som anropar `POST /api/listings/{id}/sections/{slug}/rewrite`.
 
-Geodata hämtas via Google Geocoding + Places. Aktivera båda API:erna i Google Cloud och exportera nyckeln:
+Varje sektion har även snabbkommandon (chips) med vanliga promptar – ett klick skickar en färdig instruktion så mäklaren slipper skriva själv. Alla sektioner sammanfogas automatiskt till `full_copy`, som visas i “Samlad text”-rutan och kan kopieras/exporteras.
+
+Sektionerna är flexibla: ange en valfri array i `sections` när du skapar en listing, eller lägg till/ta bort dem direkt i UI:t (lägg till-knappen genererar nya block, papperskorgen tar bort). Statuspanelen i detaljvyn visar pipeline-steg (Datainsamling, Bildunderlag, Geodata, Text) baserat på backend-fältet `status`. Knappfältet erbjuder:
+
+- `Kopiera text` – ren text (`full_copy`)
+- `Exportera HTML` – samma text som `<p>`-block (Hemnet/portaler)
+- `Ladda ner TXT` – sparar en `.txt`-fil lokalt
+
+Historik per sektion (`section_history`) sparas automatiskt (max 5 versioner) varje gång AI eller manuell redigering körs, och mäklaren kan återställa en tidigare version med ett klick.
+
+Generering sker via OpenAI (Chat Completions) när `config.json` innehåller:
+
+```json
+"ai": {
+  "provider": "openai",
+  "openai": {
+    "api_key": "DIN-OPENAI-NYCKEL",
+    "model": "gpt-4o-mini"
+  }
+}
+```
+
+Geodata hämtas via Google Geocoding + Places. Lägg nyckeln i `config.json`:
 
 | Variabel | Beskrivning |
 | --- | --- |
-| `GOOGLE_PLACES_API_KEY` | API-nyckel för Geocoding + Places |
-| `TRAFIKLAB_API_KEY` | Nyckel för Trafiklab/Resrobot |
+| `geodata.google_places_api_key` | API-nyckel för Geocoding + Places |
+| `geodata.trafiklab_api_key` | Nyckel för Trafiklab/Resrobot |
+| `geodata.cache_ttl_minutes` | (Valfri) cache-TTL för Places-resultat, default 30 |
 
 Utvecklingsläge: om nyckeln saknas faller providern tillbaka till statiska exempel.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -31,10 +32,19 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 	if err != nil {
 		return Listing{}, fmt.Errorf("marshal insights: %w", err)
 	}
+	historyJSON, err := json.Marshal(input.History)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal history: %w", err)
+	}
+
+	statusJSON, err := json.Marshal(input.Status)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal status: %w", err)
+	}
 
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO listings (id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, insights, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.Fee, input.LivingArea, input.Rooms, sectionsJSON, insightsJSON, input.CreatedAt); err != nil {
+		`INSERT INTO listings (id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.Fee, input.LivingArea, input.Rooms, sectionsJSON, input.FullCopy, historyJSON, statusJSON, insightsJSON, input.CreatedAt); err != nil {
 		return Listing{}, fmt.Errorf("insert listing: %w", err)
 	}
 
@@ -43,7 +53,7 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 
 // ListListings returns a slice of the most recent listings.
 func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
+	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
 	if err != nil {
 		return nil, fmt.Errorf("query listings: %w", err)
 	}
@@ -51,42 +61,9 @@ func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
 
 	listings := []Listing{}
 	for rows.Next() {
-		var (
-			item         Listing
-			imageURL     sql.NullString
-			fee          sql.NullInt64
-			livingArea   sql.NullFloat64
-			rooms        sql.NullFloat64
-			sectionsJSON []byte
-			insightsJSON []byte
-		)
-		if err := rows.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &fee, &livingArea, &rooms, &sectionsJSON, &insightsJSON, &item.CreatedAt); err != nil {
-			if err == pgx.ErrNoRows {
-				break
-			}
-			return nil, fmt.Errorf("scan listing: %w", err)
-		}
-		if imageURL.Valid {
-			item.ImageURL = imageURL.String
-		}
-		if fee.Valid {
-			item.Fee = int(fee.Int64)
-		}
-		if livingArea.Valid {
-			item.LivingArea = livingArea.Float64
-		}
-		if rooms.Valid {
-			item.Rooms = rooms.Float64
-		}
-		if len(sectionsJSON) > 0 {
-			if err := json.Unmarshal(sectionsJSON, &item.Sections); err != nil {
-				return nil, fmt.Errorf("unmarshal sections: %w", err)
-			}
-		}
-		if len(insightsJSON) > 0 {
-			if err := json.Unmarshal(insightsJSON, &item.Insights); err != nil {
-				return nil, fmt.Errorf("unmarshal insights: %w", err)
-			}
+		item, err := scanListing(rows)
+		if err != nil {
+			return nil, err
 		}
 		listings = append(listings, item)
 	}
@@ -99,4 +76,132 @@ func (s *PostgresStore) Close() {
 	if s.pool != nil {
 		s.pool.Close()
 	}
+}
+
+// GetListing fetches a single listing by ID.
+func (s *PostgresStore) GetListing(ctx context.Context, id string) (Listing, error) {
+	row := s.pool.QueryRow(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at FROM listings WHERE id=$1`, id)
+	item, err := scanListing(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Listing{}, ErrNotFound
+		}
+		return Listing{}, err
+	}
+	return item, nil
+}
+
+// UpdateListingSections replaces the sections JSONB for a listing and returns the updated row.
+func (s *PostgresStore) UpdateListingSections(ctx context.Context, id string, sections []Section, fullCopy string, history History, status Status) (Listing, error) {
+	payload, err := json.Marshal(sections)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal sections: %w", err)
+	}
+
+	historyJSON, err := json.Marshal(history)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal history: %w", err)
+	}
+
+	statusJSON, err := json.Marshal(status)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal status: %w", err)
+	}
+
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET sections=$2, full_copy=$3, section_history=$4, pipeline_status=$5 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at`, id, payload, fullCopy, historyJSON, statusJSON)
+	item, scanErr := scanListing(row)
+	if scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return Listing{}, ErrNotFound
+		}
+		return Listing{}, scanErr
+	}
+	return item, nil
+}
+
+// DeleteListing removes a listing entirely.
+func (s *PostgresStore) DeleteListing(ctx context.Context, id string) error {
+	result, err := s.pool.Exec(ctx, `DELETE FROM listings WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("delete listing: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateStatus updates only the pipeline status column.
+func (s *PostgresStore) UpdateStatus(ctx context.Context, id string, status Status) error {
+	payload, err := json.Marshal(status)
+	if err != nil {
+		return fmt.Errorf("marshal status: %w", err)
+	}
+
+	tag, err := s.pool.Exec(ctx, `UPDATE listings SET pipeline_status=$2 WHERE id=$1`, id, payload)
+	if err != nil {
+		return fmt.Errorf("update status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanListing(row rowScanner) (Listing, error) {
+	var (
+		item         Listing
+		imageURL     sql.NullString
+		fee          sql.NullInt64
+		livingArea   sql.NullFloat64
+		rooms        sql.NullFloat64
+		sectionsJSON []byte
+		fullCopy     sql.NullString
+		historyJSON  []byte
+		statusJSON   []byte
+		insightsJSON []byte
+	)
+	if err := row.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &fee, &livingArea, &rooms, &sectionsJSON, &fullCopy, &historyJSON, &statusJSON, &insightsJSON, &item.CreatedAt); err != nil {
+		return Listing{}, fmt.Errorf("scan listing: %w", err)
+	}
+	if imageURL.Valid {
+		item.ImageURL = imageURL.String
+	}
+	if fee.Valid {
+		item.Fee = int(fee.Int64)
+	}
+	if livingArea.Valid {
+		item.LivingArea = livingArea.Float64
+	}
+	if rooms.Valid {
+		item.Rooms = rooms.Float64
+	}
+	if len(sectionsJSON) > 0 {
+		if err := json.Unmarshal(sectionsJSON, &item.Sections); err != nil {
+			return Listing{}, fmt.Errorf("unmarshal sections: %w", err)
+		}
+	}
+	if fullCopy.Valid {
+		item.FullCopy = fullCopy.String
+	}
+	if len(historyJSON) > 0 {
+		if err := json.Unmarshal(historyJSON, &item.History); err != nil {
+			return Listing{}, fmt.Errorf("unmarshal history: %w", err)
+		}
+	}
+	if len(statusJSON) > 0 {
+		if err := json.Unmarshal(statusJSON, &item.Status); err != nil {
+			return Listing{}, fmt.Errorf("unmarshal status: %w", err)
+		}
+	}
+	if len(insightsJSON) > 0 {
+		if err := json.Unmarshal(insightsJSON, &item.Insights); err != nil {
+			return Listing{}, fmt.Errorf("unmarshal insights: %w", err)
+		}
+	}
+	return item, nil
 }

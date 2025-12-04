@@ -1,80 +1,73 @@
 package config
 
 import (
-	"log"
+	"encoding/json"
+	"fmt"
 	"os"
-	"strconv"
-	"strings"
 )
 
-// Config holds runtime configuration values.
+// Config holds runtime configuration values loaded from config.json.
 type Config struct {
-	Port        string
-	DatabaseURL string
-	Media       MediaConfig
-	Geodata     GeodataConfig
+	Port        string        `json:"port"`
+	DatabaseURL string        `json:"database_url"`
+	Media       MediaConfig   `json:"media"`
+	Geodata     GeodataConfig `json:"geodata"`
+	AI          AIConfig      `json:"ai"`
 }
 
 // MediaConfig describes S3/media related configuration.
 type MediaConfig struct {
-	Bucket         string
-	Region         string
-	Endpoint       string
-	PublicURL      string
-	KeyPrefix      string
-	ForcePathStyle bool
+	Bucket         string `json:"bucket"`
+	Region         string `json:"region"`
+	Endpoint       string `json:"endpoint"`
+	PublicURL      string `json:"public_url"`
+	KeyPrefix      string `json:"key_prefix"`
+	ForcePathStyle bool   `json:"force_path_style"`
 }
 
 // GeodataConfig bundles relevant API keys.
 type GeodataConfig struct {
-	GooglePlacesAPIKey string
-	TrafficAPIKey      string
+	GooglePlacesAPIKey string `json:"google_places_api_key"`
+	TrafficAPIKey      string `json:"trafiklab_api_key"`
+	CacheTTLMinutes    int    `json:"cache_ttl_minutes"`
 }
 
-// FromEnv loads configuration from environment variables and applies defaults.
-func FromEnv() Config {
-	cfg := Config{
-		Port:        getenv("APP_PORT", "8080"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		Media: MediaConfig{
-			Bucket:         os.Getenv("S3_BUCKET"),
-			Region:         os.Getenv("S3_REGION"),
-			Endpoint:       os.Getenv("S3_ENDPOINT"),
-			PublicURL:      os.Getenv("S3_PUBLIC_URL"),
-			KeyPrefix:      strings.Trim(os.Getenv("S3_KEY_PREFIX"), "/"),
-			ForcePathStyle: getenvBool("S3_FORCE_PATH_STYLE", false),
-		},
-		Geodata: GeodataConfig{
-			GooglePlacesAPIKey: os.Getenv("GOOGLE_PLACES_API_KEY"),
-			TrafficAPIKey:      os.Getenv("TRAFIKLAB_API_KEY"),
-		},
-	}
-
-	if cfg.Port == "" {
-		log.Fatal("APP_PORT cannot be empty")
-	}
-
-	return cfg
+// AIConfig selects which LLM provider to use.
+type AIConfig struct {
+	Provider string       `json:"provider"`
+	OpenAI   OpenAIConfig `json:"openai"`
 }
 
-func getenv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-
-	return fallback
+// OpenAIConfig holds API credentials and defaults.
+type OpenAIConfig struct {
+	APIKey string `json:"api_key"`
+	Model  string `json:"model"`
 }
 
-func getenvBool(key string, fallback bool) bool {
-	val := os.Getenv(key)
-	if val == "" {
-		return fallback
-	}
-
-	parsed, err := strconv.ParseBool(val)
+// Load reads configuration from the provided JSON file.
+func Load(path string) (Config, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fallback
+		return Config{}, fmt.Errorf("read config: %w", err)
 	}
 
-	return parsed
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return Config{}, fmt.Errorf("parse config: %w", err)
+	}
+
+	applyDefaults(&cfg)
+	return cfg, nil
+}
+
+func applyDefaults(cfg *Config) {
+	if cfg.Port == "" {
+		cfg.Port = "8080"
+	}
+	if cfg.Geodata.CacheTTLMinutes == 0 {
+		cfg.Geodata.CacheTTLMinutes = 30
+	}
+	if cfg.AI.OpenAI.Model == "" {
+		cfg.AI.OpenAI.Model = "gpt-4o-mini"
+	}
 }

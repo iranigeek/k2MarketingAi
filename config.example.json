@@ -1,0 +1,24 @@
+{
+  "port": "8080",
+  "database_url": "",
+  "media": {
+    "bucket": "",
+    "region": "",
+    "endpoint": "",
+    "public_url": "",
+    "key_prefix": "",
+    "force_path_style": false
+  },
+  "geodata": {
+    "google_places_api_key": "",
+    "trafiklab_api_key": "",
+    "cache_ttl_minutes": 30
+  },
+  "ai": {
+    "provider": "openai",
+    "openai": {
+      "api_key": "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",
+      "model": "gpt-4o-mini"
+    }
+  }
+}
