@@ -1,9 +1,9 @@
 :root {
-    --primary: #2c6e49;
-    --secondary: #f0f4f8;
-    --text: #102a43;
-    --muted: #829ab1;
-    --border: #d9e2ec;
+    --primary: #1d4ed8;
+    --secondary: #e6f0ff;
+    --text: #0f172a;
+    --muted: #5673a6;
+    --border: #c7d7f5;
 }
 
 * {
@@ -18,7 +18,7 @@ body {
 }
 
 .hero {
-    background: linear-gradient(120deg, #2c6e49, #1b4332);
+    background: linear-gradient(120deg, #1d4ed8, #0a3b8f);
     color: white;
     padding: 3rem 1.5rem;
 }
@@ -127,8 +127,8 @@ input, select, textarea, button {
 }
 
 input:focus, select:focus {
-    outline: 2px solid #8fd19e;
-    border-color: #8fd19e;
+    outline: 2px solid #93c5fd;
+    border-color: #93c5fd;
 }
 
 button {
@@ -142,7 +142,7 @@ button {
 
 button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 10px 20px rgba(44, 110, 73, 0.2);
+    box-shadow: 0 10px 20px rgba(29, 78, 216, 0.2);
 }
 
 button.secondary {
@@ -181,7 +181,7 @@ button.secondary.danger {
 }
 
 .list__item:hover {
-    border-color: #8fd19e;
+    border-color: #93c5fd;
     box-shadow: 0 6px 14px rgba(16, 42, 67, 0.05);
 }
 
@@ -218,8 +218,8 @@ button.secondary.danger {
 }
 
 .badge {
-    background: #d1fadf;
-    color: #1b4332;
+    background: #dbeafe;
+    color: #1e3a8a;
     border-radius: 999px;
     padding: 0.25rem 0.75rem;
     font-weight: 600;
@@ -237,7 +237,7 @@ button.secondary.danger {
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 0.75rem;
-    background: #fbfcfd;
+    background: #f3f7ff;
 }
 
 .section-card h4 {
@@ -306,9 +306,9 @@ button.secondary.danger {
 }
 
 .status-pill.complete {
-    border-color: #22c55e;
-    color: #15803d;
-    background: #dcfce7;
+    border-color: #60a5fa;
+    color: #1d4ed8;
+    background: #dbeafe;
 }
 
 .detail__body {
@@ -322,7 +322,7 @@ button.secondary.danger {
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 1rem;
-    background: #f8fafc;
+    background: #eef4ff;
 }
 
 .section-editor header {
@@ -357,7 +357,7 @@ button.secondary.danger {
 }
 
 .quick-prompts button {
-    background: #f1f5f9;
+    background: #eaf2ff;
     border: 1px solid var(--border);
     color: var(--text);
     font-size: 0.85rem;
