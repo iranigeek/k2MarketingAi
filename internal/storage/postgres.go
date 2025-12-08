@@ -42,9 +42,14 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 		return Listing{}, fmt.Errorf("marshal status: %w", err)
 	}
 
+	detailsJSON, err := json.Marshal(input.Details)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal details: %w", err)
+	}
+
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO listings (id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.Fee, input.LivingArea, input.Rooms, sectionsJSON, input.FullCopy, historyJSON, statusJSON, insightsJSON, input.CreatedAt); err != nil {
+		`INSERT INTO listings (id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.Fee, input.LivingArea, input.Rooms, sectionsJSON, input.FullCopy, historyJSON, statusJSON, detailsJSON, insightsJSON, input.CreatedAt); err != nil {
 		return Listing{}, fmt.Errorf("insert listing: %w", err)
 	}
 
@@ -53,7 +58,7 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 
 // ListListings returns a slice of the most recent listings.
 func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
+	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
 	if err != nil {
 		return nil, fmt.Errorf("query listings: %w", err)
 	}
@@ -80,7 +85,7 @@ func (s *PostgresStore) Close() {
 
 // GetListing fetches a single listing by ID.
 func (s *PostgresStore) GetListing(ctx context.Context, id string) (Listing, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at FROM listings WHERE id=$1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings WHERE id=$1`, id)
 	item, err := scanListing(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -108,7 +113,7 @@ func (s *PostgresStore) UpdateListingSections(ctx context.Context, id string, se
 		return Listing{}, fmt.Errorf("marshal status: %w", err)
 	}
 
-	row := s.pool.QueryRow(ctx, `UPDATE listings SET sections=$2, full_copy=$3, section_history=$4, pipeline_status=$5 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, insights, created_at`, id, payload, fullCopy, historyJSON, statusJSON)
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET sections=$2, full_copy=$3, section_history=$4, pipeline_status=$5 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at`, id, payload, fullCopy, historyJSON, statusJSON)
 	item, scanErr := scanListing(row)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
@@ -163,9 +168,10 @@ func scanListing(row rowScanner) (Listing, error) {
 		fullCopy     sql.NullString
 		historyJSON  []byte
 		statusJSON   []byte
+		detailsJSON  []byte
 		insightsJSON []byte
 	)
-	if err := row.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &fee, &livingArea, &rooms, &sectionsJSON, &fullCopy, &historyJSON, &statusJSON, &insightsJSON, &item.CreatedAt); err != nil {
+	if err := row.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &fee, &livingArea, &rooms, &sectionsJSON, &fullCopy, &historyJSON, &statusJSON, &detailsJSON, &insightsJSON, &item.CreatedAt); err != nil {
 		return Listing{}, fmt.Errorf("scan listing: %w", err)
 	}
 	if imageURL.Valid {
@@ -196,6 +202,11 @@ func scanListing(row rowScanner) (Listing, error) {
 	if len(statusJSON) > 0 {
 		if err := json.Unmarshal(statusJSON, &item.Status); err != nil {
 			return Listing{}, fmt.Errorf("unmarshal status: %w", err)
+		}
+	}
+	if len(detailsJSON) > 0 {
+		if err := json.Unmarshal(detailsJSON, &item.Details); err != nil {
+			return Listing{}, fmt.Errorf("unmarshal details: %w", err)
 		}
 	}
 	if len(insightsJSON) > 0 {

@@ -28,6 +28,7 @@ type Listing struct {
 	History        History   `json:"section_history,omitempty"`
 	Status         Status    `json:"status,omitempty"`
 	Insights       Insights  `json:"insights,omitempty"`
+	Details        Details   `json:"details,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -49,6 +50,84 @@ type Status struct {
 	Vision  string `json:"vision"`
 	Geodata string `json:"geodata"`
 	Text    string `json:"text"`
+}
+
+// Details aggregates the richer structured data from the new form.
+type Details struct {
+	Meta        MetaInfo        `json:"meta"`
+	Property    PropertyInfo    `json:"property"`
+	Association AssociationInfo `json:"association"`
+	Area        AreaInfo        `json:"area"`
+	Advantages  []string        `json:"advantages"`
+}
+
+// MetaInfo controls tone and text strategy.
+type MetaInfo struct {
+	DesiredWordCount int    `json:"desired_word_count"`
+	Tone             string `json:"tone"`
+	TargetAudience   string `json:"target_audience"`
+	LanguageVariant  string `json:"language_variant"`
+}
+
+// PropertyInfo stores property-level facts.
+type PropertyInfo struct {
+	Address             string  `json:"address"`
+	PostalCode          string  `json:"postal_code"`
+	City                string  `json:"city"`
+	Area                string  `json:"area"`
+	Municipality        string  `json:"municipality"`
+	PropertyType        string  `json:"property_type"`
+	Tenure              string  `json:"tenure"`
+	Rooms               float64 `json:"rooms"`
+	LivingArea          float64 `json:"living_area"`
+	AdditionalArea      float64 `json:"additional_area"`
+	Floor               string  `json:"floor"`
+	NumberOfFloors      string  `json:"number_of_floors"`
+	Elevator            bool    `json:"elevator"`
+	YearBuilt           int     `json:"year_built"`
+	YearRenovated       int     `json:"year_renovated"`
+	Condition           string  `json:"condition"`
+	PlanSummary         string  `json:"plan_summary"`
+	InteriorStyle       string  `json:"interior_style"`
+	Flooring            string  `json:"flooring"`
+	CeilingHeight       string  `json:"ceiling_height"`
+	LightIntake         string  `json:"light_intake"`
+	KitchenDescription  string  `json:"kitchen_description"`
+	BedroomDescription  string  `json:"bedroom_description"`
+	LivingDescription   string  `json:"living_description"`
+	BathroomDescription string  `json:"bathroom_description"`
+	ExtraRooms          string  `json:"extra_rooms"`
+	OutdoorDescription  string  `json:"outdoor_description"`
+	StorageDescription  string  `json:"storage_description"`
+	ParkingDescription  string  `json:"parking_description"`
+	EnergyClass         string  `json:"energy_class"`
+	Heating             string  `json:"heating"`
+	FeePerMonth         int     `json:"fee_per_month"`
+	OperatingCost       int     `json:"operating_cost"`
+	ListPrice           int     `json:"list_price"`
+	PriceText           string  `json:"price_text"`
+}
+
+// AssociationInfo describes the HOA or property association.
+type AssociationInfo struct {
+	Name               string `json:"name"`
+	Type               string `json:"type"`
+	FinancialSummary   string `json:"financial_summary"`
+	DebtPerSquareMeter int    `json:"debt_per_square_meter"`
+	CommonAreas        string `json:"common_areas"`
+	RenovationsDone    string `json:"renovations_done"`
+	RenovationsPlanned string `json:"renovations_planned"`
+	AdditionalInfo     string `json:"additional_info"`
+}
+
+// AreaInfo contains surrounding neighborhood data.
+type AreaInfo struct {
+	Summary       string `json:"summary"`
+	Transport     string `json:"transport"`
+	Service       string `json:"service"`
+	Schools       string `json:"schools"`
+	NatureLeisure string `json:"nature_leisure"`
+	Other         string `json:"other"`
 }
 
 // History maps section slugs to previous versions.
@@ -131,6 +210,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
         full_copy TEXT,
         section_history JSONB DEFAULT '{}'::jsonb,
         pipeline_status JSONB DEFAULT '{}'::jsonb,
+        details JSONB DEFAULT '{}'::jsonb,
 		insights JSONB DEFAULT '{}'::jsonb,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`)
@@ -147,6 +227,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS full_copy TEXT`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS section_history JSONB DEFAULT '{}'::jsonb`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS pipeline_status JSONB DEFAULT '{}'::jsonb`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'::jsonb`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS insights JSONB DEFAULT '{}'::jsonb`,
 	}
 	for _, stmt := range schemaAlters {

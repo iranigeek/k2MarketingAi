@@ -134,6 +134,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Insights:       storage.Insights{},
 		CreatedAt:      time.Now(),
 	}
+	hydrateDetailsFromLegacy(&listing)
 
 	if h.GeoProvider != nil {
 		if summary, err := h.GeoProvider.Fetch(r.Context(), req.Address); err == nil {
@@ -144,14 +145,19 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Generator != nil {
-		if sections, genErr := h.Generator.Generate(r.Context(), listing); genErr == nil {
-			listing.Sections = sections
+		if result, genErr := h.Generator.Generate(r.Context(), listing); genErr == nil {
+			listing.Sections = result.Sections
+			if strings.TrimSpace(result.FullCopy) != "" {
+				listing.FullCopy = result.FullCopy
+			}
 		} else {
 			log.Printf("generator failed, using fallback sections: %v", genErr)
 		}
 	}
 	recordHistoryForAll(&listing, "generate")
-	listing.FullCopy = composeFullCopy(listing.Sections)
+	if listing.FullCopy == "" {
+		listing.FullCopy = composeFullCopy(listing.Sections)
+	}
 	deriveStatus(&listing)
 
 	listing, err = h.Store.CreateListing(r.Context(), listing)
@@ -173,6 +179,10 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	for i := range listings {
+		hydrateDetailsFromLegacy(&listings[i])
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -197,6 +207,7 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hydrateDetailsFromLegacy(&listing)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(listing)
 }
@@ -261,6 +272,7 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 	if fallbackUsed {
 		w.Header().Set("X-Generator-Fallback", "1")
 	}
+	hydrateDetailsFromLegacy(&updated)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updated)
 	h.publishListing(updated)
@@ -325,6 +337,7 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hydrateDetailsFromLegacy(&updated)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updated)
 	h.publishListing(updated)

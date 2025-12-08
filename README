@@ -122,10 +122,14 @@ Varje sektion har även snabbkommandon (chips) med vanliga promptar – ett klic
 Sektionerna är flexibla: ange en valfri array i `sections` när du skapar en listing, eller lägg till/ta bort dem direkt i UI:t (lägg till-knappen genererar nya block, papperskorgen tar bort). Geodata samlas nu in per kategori (matbutiker, restauranger, park, gym, transit) och sammanfattas i området-sektionen i stället för en rå lista. Statuspanelen i detaljvyn visar pipeline-steg (Datainsamling, Bildunderlag, Geodata, Text) baserat på backend-fältet `status`. Knappfältet erbjuder:
 
 - `Kopiera text` – ren text (`full_copy`)
+
+- `Kopiera text` – ren text (`full_copy`)
 - `Exportera HTML` – samma text som `<p>`-block (Hemnet/portaler)
 - `Ladda ner TXT` – sparar en `.txt`-fil lokalt
 
 Historik per sektion (`section_history`) sparas automatiskt (max 5 versioner) varje gång AI eller manuell redigering körs, och mäklaren kan återställa en tidigare version med ett klick.
+
+> Promptmotorn för OpenAI är uppstyrd med tydliga sektioninstruktioner och exempelstil, så att texterna följer professionell mäklar-copy snarare än generiska utsagor.
 
 Generering sker via OpenAI (Chat Completions) när `config.json` innehåller:
 
