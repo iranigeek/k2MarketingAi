@@ -38,6 +38,14 @@ type Handler struct {
 // CreateListingRequest describes inbound payload for creating a listing.
 type CreateListingRequest struct {
 	Address        string         `json:"address"`
+	Neighborhood   string         `json:"neighborhood"`
+	City           string         `json:"city"`
+	PropertyType   string         `json:"property_type"`
+	Condition      string         `json:"condition"`
+	Balcony        bool           `json:"balcony"`
+	Floor          string         `json:"floor"`
+	Association    string         `json:"association"`
+	Length         string         `json:"length"`
 	Tone           string         `json:"tone"`
 	TargetAudience string         `json:"target_audience"`
 	Highlights     []string       `json:"highlights"`
@@ -122,6 +130,14 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	listing := storage.Listing{
 		Address:        req.Address,
+		Neighborhood:   req.Neighborhood,
+		City:           req.City,
+		PropertyType:   req.PropertyType,
+		Condition:      req.Condition,
+		Balcony:        req.Balcony,
+		Floor:          req.Floor,
+		Association:    req.Association,
+		Length:         req.Length,
 		Tone:           req.Tone,
 		TargetAudience: req.TargetAudience,
 		Highlights:     req.Highlights,
@@ -583,6 +599,13 @@ func splitHighlights(raw string) []string {
 
 func trimCreateRequest(req *CreateListingRequest) {
 	req.Address = strings.TrimSpace(req.Address)
+	req.Neighborhood = strings.TrimSpace(req.Neighborhood)
+	req.City = strings.TrimSpace(req.City)
+	req.PropertyType = strings.TrimSpace(req.PropertyType)
+	req.Condition = strings.TrimSpace(req.Condition)
+	req.Floor = strings.TrimSpace(req.Floor)
+	req.Association = strings.TrimSpace(req.Association)
+	req.Length = strings.TrimSpace(req.Length)
 	req.Tone = strings.TrimSpace(req.Tone)
 	req.TargetAudience = strings.TrimSpace(req.TargetAudience)
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
@@ -591,11 +614,7 @@ func trimCreateRequest(req *CreateListingRequest) {
 
 func buildDefaultSections(req CreateListingRequest, imageURL string) []storage.Section {
 	return []storage.Section{
-		{Slug: "intro", Title: "Inledning", Content: buildIntro(req, imageURL)},
-		{Slug: "hall", Title: "Hall", Content: "Rymlig hall med gott om plats för förvaring och ett välkomnande första intryck."},
-		{Slug: "kitchen", Title: "Kök", Content: "Stilrent kök med bra arbetsytor och harmonisk koppling till matplatsen."},
-		{Slug: "living", Title: "Vardagsrum", Content: "Socialt vardagsrum med fina ljusinsläpp och plats för både soffgrupp och läshörna."},
-		{Slug: "area", Title: "Området", Content: "Området bjuder på närhet till service, kommunikationer och rekreation."},
+		{Slug: "main", Title: "Annons", Content: buildMinimalAd(req, imageURL)},
 	}
 }
 
@@ -622,10 +641,8 @@ func buildSectionsFromInput(req CreateListingRequest, imageURL string) []storage
 			title = strings.Title(slug)
 		}
 		content := strings.TrimSpace(s.Content)
-		if content == "" && slug == "intro" {
-			content = buildIntro(req, imageURL)
-		} else if content == "" {
-			content = "Text genereras vid behov."
+		if content == "" {
+			content = buildMinimalAd(req, imageURL)
 		}
 
 		sections = append(sections, storage.Section{
@@ -642,20 +659,70 @@ func buildSectionsFromInput(req CreateListingRequest, imageURL string) []storage
 	return sections
 }
 
-func buildIntro(req CreateListingRequest, imageURL string) string {
+func buildMinimalAd(req CreateListingRequest, imageURL string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Välkommen till %s – en bostad som kombinerar ", req.Address)
-	if req.Tone != "" {
-		fmt.Fprintf(&b, "%s känsla och ", strings.ToLower(req.Tone))
+	location := strings.TrimSpace(strings.Join([]string{req.Neighborhood, req.City}, ", "))
+	tone := req.Tone
+	if tone == "" {
+		tone = "Neutral"
 	}
-	fmt.Fprint(&b, "ett omsorgsfullt ljusinsläpp.")
-	if imageURL != "" {
-		fmt.Fprint(&b, " Hjältebilden ger en hint om atmosfären redan innan visningen.")
+
+	fmt.Fprintf(&b, "Välkommen till %s", req.Address)
+	if location != "" {
+		fmt.Fprintf(&b, " i %s", location)
+	}
+	fmt.Fprintf(&b, " – en %s %s med %s.", strings.ToLower(tone), strings.ToLower(orDefault(req.PropertyType, "bostad")), describeRooms(req.Rooms, req.LivingArea))
+
+	if req.Balcony {
+		fmt.Fprint(&b, " Balkong eller uteplats finns för sköna stunder utomhus.")
+	}
+	if req.Condition != "" {
+		fmt.Fprintf(&b, " Skicket upplevs som %s, vilket ger en trygg bas att flytta in i.", strings.ToLower(req.Condition))
+	}
+	if req.Floor != "" {
+		fmt.Fprintf(&b, " Bostaden ligger på våning %s.", req.Floor)
+	}
+	if req.Association != "" {
+		fmt.Fprintf(&b, " Föreningen heter %s.", req.Association)
 	}
 	if len(req.Highlights) > 0 {
-		fmt.Fprintf(&b, " Highlights: %s.", strings.Join(req.Highlights, ", "))
+		fmt.Fprintf(&b, " Fördelar: %s.", strings.Join(req.Highlights, ", "))
 	}
-	return b.String()
+	if imageURL != "" {
+		fmt.Fprint(&b, " Bildunderlaget ger en bra känsla redan innan visningen.")
+	}
+
+	fmt.Fprintf(&b, "\n\nPlanlösningen nyttjar ytan väl med sociala och privata delar som flyter ihop naturligt. ")
+	fmt.Fprint(&b, "Köket och vardagsrummet binder ihop hemmet för både vardag och umgänge, medan sovdelarna ger ro och balans. ")
+	fmt.Fprint(&b, "Badrumsdelen beskrivs generellt och utan påhittade detaljer för att hålla fakta korrekt. ")
+
+	if req.Association != "" {
+		fmt.Fprint(&b, "Föreningen presenteras kort utan att lägga till fakta som inte finns i inmatningen. ")
+	}
+	fmt.Fprint(&b, "Området kan beskrivas generellt med närhet till service, natur eller kommunikationer utan att hitta på specifika namn.")
+
+	fmt.Fprint(&b, "\n\nSammanfattningsvis får köparen en inbjudande bostad med balanserad ton, redo för nästa kapitel.")
+	return strings.TrimSpace(b.String())
+}
+
+func orDefault(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func describeRooms(rooms float64, area float64) string {
+	switch {
+	case rooms > 0 && area > 0:
+		return fmt.Sprintf("%s fördelat över ca %.0f kvm", formatRooms(rooms), area)
+	case rooms > 0:
+		return fmt.Sprintf("%s med flexibel planlösning", formatRooms(rooms))
+	case area > 0:
+		return fmt.Sprintf("funktionella %.0f kvm", area)
+	default:
+		return "välavvägd planlösning"
+	}
 }
 
 func findSectionIndex(sections []storage.Section, slug string) int {

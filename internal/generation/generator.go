@@ -29,43 +29,54 @@ func NewHeuristic() Generator {
 
 type heuristicGenerator struct{}
 
-func (heuristicGenerator) Generate(_ context.Context, listing storage.Listing) (Result, error) {
-	sections := []storage.Section{
-		{Slug: "intro", Title: "Inledning"},
-		{Slug: "hall", Title: "Hall"},
-		{Slug: "kitchen", Title: "Kök"},
-		{Slug: "living", Title: "Vardagsrum"},
-		{Slug: "area", Title: "Området"},
+func (heuristicGenerator) Generate(_ context.Context, listing storage.Listing) ([]storage.Section, error) {
+	content := buildFullAd(listing)
+	return []storage.Section{{Slug: "main", Title: "Annons", Content: content}}, nil
+}
+
+func buildFullAd(listing storage.Listing) string {
+	var b strings.Builder
+	location := strings.TrimSpace(strings.Join([]string{listing.Neighborhood, listing.City}, ", "))
+	tone := defaultTone(listing.Tone)
+
+	fmt.Fprintf(&b, "Välkommen till %s", listing.Address)
+	if location != "" {
+		fmt.Fprintf(&b, " i %s", location)
+	}
+	fmt.Fprintf(&b, " – en %s %s som levererar %s.", strings.ToLower(tone), strings.ToLower(orDefault(listing.PropertyType, "bostad")), describeRooms(listing.Rooms, listing.LivingArea))
+
+	if listing.Balcony {
+		fmt.Fprint(&b, " Här finns balkong eller uteplats för naturligt ljus och frisk luft.")
+	}
+	if listing.Condition != "" {
+		fmt.Fprintf(&b, " Skicket upplevs som %s vilket gör det enkelt att flytta in.", strings.ToLower(listing.Condition))
+	}
+	if listing.Floor != "" {
+		fmt.Fprintf(&b, " Våning: %s.", listing.Floor)
+	}
+	if listing.Association != "" {
+		fmt.Fprintf(&b, " Förening: %s.", listing.Association)
+	}
+	if len(listing.Highlights) > 0 {
+		fmt.Fprintf(&b, " Fördelar: %s.", strings.Join(listing.Highlights, ", "))
 	}
 
-	for idx := range sections {
-		switch sections[idx].Slug {
-		case "intro":
-			sections[idx].Content = buildIntroCopy(listing)
-		case "hall":
-			sections[idx].Content = buildHallCopy(listing)
-		case "kitchen":
-			sections[idx].Content = buildKitchenCopy(listing)
-		case "living":
-			sections[idx].Content = buildLivingCopy(listing)
-		case "area":
-			sections[idx].Content = buildAreaCopy(listing)
-		}
-	}
+	fmt.Fprint(&b, "\n\nPlanlösningen nyttjar ytan smart mellan sociala och privata delar. Köket och vardagsrummet bjuder in till både vardag och middagar, medan sovrummen ger ro. Badrumsdelen beskrivs neutralt utan påhittade detaljer för att hålla fakta korrekt.")
 
-	return Result{
-		Sections: sections,
-		FullCopy: composeFullCopyFromSections(sections),
-	}, nil
+	fmt.Fprint(&b, "\n\nOmrådet kan beskrivas generellt med närhet till service, natur eller kommunikationer beroende på vad som faktiskt finns tillgängligt. Texten undviker att hitta på namn eller siffror som inte finns i underlaget.")
+
+	fmt.Fprint(&b, "\n\nAvslutningen sammanfattar bostadens känsla och inbjuder till visning med ett språk som känns unikt, varierat och professionellt.")
+
+	return strings.TrimSpace(b.String())
 }
 
 func (heuristicGenerator) Rewrite(_ context.Context, listing storage.Listing, section storage.Section, instruction string) (storage.Section, error) {
 	base := section.Content
 	if strings.TrimSpace(base) == "" {
-		base = buildIntroCopy(listing)
+		base = buildFullAd(listing)
 	}
 
-	section.Content = ApplyLocalRewrite(base, instruction)
+	section.Content = applyLocalRewrite(base, instruction)
 	return section, nil
 }
 
@@ -149,6 +160,26 @@ func defaultTone(tone string) string {
 		return "varm och familjär"
 	}
 	return tone
+}
+
+func orDefault(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func describeRooms(rooms float64, area float64) string {
+	switch {
+	case rooms > 0 && area > 0:
+		return fmt.Sprintf("%s över ca %.0f kvm", formatRooms(rooms), area)
+	case rooms > 0:
+		return fmt.Sprintf("%s med flexibel yta", formatRooms(rooms))
+	case area > 0:
+		return fmt.Sprintf("funktionella %.0f kvm", area)
+	default:
+		return "välbalanserad planlösning"
+	}
 }
 
 func formatRooms(rooms float64) string {
@@ -279,41 +310,50 @@ func (g *openAIGenerator) Generate(ctx context.Context, listing storage.Listing)
 	}
 
 	payload, _ := json.Marshal(struct {
-		Address        string   `json:"address"`
-		Tone           string   `json:"tone"`
-		TargetAudience string   `json:"target_audience"`
-		Highlights     []string `json:"highlights"`
-		Fee            int      `json:"fee"`
-		LivingArea     float64  `json:"living_area"`
-		Rooms          float64  `json:"rooms"`
-		Geodata        string   `json:"geodata"`
-		Sections       []string `json:"sections"`
+		Address        string           `json:"address"`
+		Neighborhood   string           `json:"neighborhood"`
+		City           string           `json:"city"`
+		PropertyType   string           `json:"property_type"`
+		Condition      string           `json:"condition"`
+		Balcony        bool             `json:"balcony"`
+		Floor          string           `json:"floor"`
+		Association    string           `json:"association"`
+		Length         string           `json:"length"`
+		Tone           string           `json:"tone"`
+		TargetAudience string           `json:"target_audience"`
+		Highlights     []string         `json:"highlights"`
+		Fee            int              `json:"fee"`
+		LivingArea     float64          `json:"living_area"`
+		Rooms          float64          `json:"rooms"`
+		Insights       storage.Insights `json:"insights"`
+		Sections       []string         `json:"sections"`
 	}{
 		Address:        listing.Address,
+		Neighborhood:   listing.Neighborhood,
+		City:           listing.City,
+		PropertyType:   listing.PropertyType,
+		Condition:      listing.Condition,
+		Balcony:        listing.Balcony,
+		Floor:          listing.Floor,
+		Association:    listing.Association,
+		Length:         listing.Length,
 		Tone:           listing.Tone,
 		TargetAudience: listing.TargetAudience,
 		Highlights:     listing.Highlights,
 		Fee:            listing.Fee,
 		LivingArea:     listing.LivingArea,
 		Rooms:          listing.Rooms,
-		Geodata:        joinGeoInsights(listing.Insights.Geodata),
-		Sections:       []string{"intro", "hall", "kitchen", "living", "area"},
+		Insights:       listing.Insights,
+		Sections:       []string{"main"},
 	})
 
-	systemPrompt := `Du är en erfaren svensk copywriter som skriver för premium-mäklare. Stilen ska kännas engagerande och målande utan klyschor som "ljus och fräsch".
-- 2–4 meningar per sektion.
-- Lyft faktiska detaljer (material, funktion, läge), väv in livsstil och känsla.
-- Undvik upprepningar, använd varierat språk som i professionella bostadsannonser.
-- Skriv allt på svenska.`
-	userPrompt := fmt.Sprintf(`Generera JSON med fältet "sections" (lista av objekt med "slug","title","content") för sektionerna intro, hall, kitchen, living, area. Följ instruktionerna:
-intro: måla upp bostadens själ, adress och tonalitet, nämn livsstil och ev. höjdpunkt (balkong, utsikt etc).
-hall: beskriv entréns känsla och funktion (förvaring, ljus, första intryck).
-kitchen: fokusera på matlagning, material och sociala ytor.
-living: beskriv rymd, ljus, utsikt och känslan av samvaro.
-area: använd geodata och sammanfatta mat/service, rekreation och kommunikation.
-
-Exempelstil: "Här möter stads- puls Mälarens lugn..." (se payload).
-
+	systemPrompt := "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver unika, varierade och faktaförankrade annonstexter på svenska. Hitta aldrig på specifika fakta. Om information saknas, skriv generellt och professionellt."
+	userPrompt := fmt.Sprintf(`Generera JSON med fältet "sections" som innehåller exakt ett objekt { "slug": "main", "title": "Annons", "content": "..." }.
+Krav:
+- Använd det givna datat. Hitta inte på siffror eller detaljer som saknas.
+- Variera meningslängd och struktur, byt gärna ordning på stycken.
+- Respektera vald ton och längd (kort/normal/lång) om den finns.
+- Om balkong, förening, våning eller skick saknas: hoppa över eller skriv neutralt.
 Data:
 %s`, string(payload))
 

@@ -16,6 +16,14 @@ var ErrNotFound = errors.New("listing not found")
 type Listing struct {
 	ID             string    `json:"id"`
 	Address        string    `json:"address"`
+	Neighborhood   string    `json:"neighborhood,omitempty"`
+	City           string    `json:"city,omitempty"`
+	PropertyType   string    `json:"property_type,omitempty"`
+	Condition      string    `json:"condition,omitempty"`
+	Balcony        bool      `json:"balcony,omitempty"`
+	Floor          string    `json:"floor,omitempty"`
+	Association    string    `json:"association,omitempty"`
+	Length         string    `json:"length,omitempty"`
 	Tone           string    `json:"tone"`
 	TargetAudience string    `json:"target_audience"`
 	Highlights     []string  `json:"highlights"`
@@ -199,6 +207,14 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS listings (
         id TEXT PRIMARY KEY,
         address TEXT NOT NULL,
+        neighborhood TEXT,
+        city TEXT,
+        property_type TEXT,
+        condition TEXT,
+        balcony BOOLEAN,
+        floor TEXT,
+        association TEXT,
+        length TEXT,
         tone TEXT NOT NULL,
         target_audience TEXT NOT NULL,
         highlights TEXT[],
@@ -219,6 +235,14 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 
 	var schemaAlters = []string{
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS neighborhood TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS city TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_type TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS balcony BOOLEAN`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS floor TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS association TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS length TEXT`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS image_url TEXT`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS fee INTEGER`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS living_area DOUBLE PRECISION`,
