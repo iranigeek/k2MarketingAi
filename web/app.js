@@ -309,8 +309,16 @@ async function submitListing(event) {
     }
 }
 
+const sidebarToggle = document.getElementById('sidebar-toggle');
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-collapsed');
+    });
+}
+
 document.getElementById('listing-form').addEventListener('submit', submitListing);
 document.getElementById('refresh-btn').addEventListener('click', fetchListings);
+document.querySelectorAll('.refresh-inline').forEach(btn => btn.addEventListener('click', fetchListings));
 
 document.getElementById('listing-list').addEventListener('click', event => {
     const item = event.target.closest('.list__item');
