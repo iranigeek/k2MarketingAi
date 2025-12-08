@@ -153,7 +153,8 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	hydrateDetailsFromLegacy(&listing)
 
 	if h.GeoProvider != nil {
-		if summary, err := h.GeoProvider.Fetch(r.Context(), req.Address); err == nil {
+		searchAddress := combineAddressCity(req.Address, req.City)
+		if summary, err := h.GeoProvider.Fetch(r.Context(), searchAddress); err == nil {
 			listing.Insights.Geodata = geodata.ToStorageInsights(summary)
 		} else {
 			log.Printf("geodata fetch failed: %v", err)
@@ -703,6 +704,17 @@ func buildMinimalAd(req CreateListingRequest, imageURL string) string {
 
 	fmt.Fprint(&b, "\n\nSammanfattningsvis får köparen en inbjudande bostad med balanserad ton, redo för nästa kapitel.")
 	return strings.TrimSpace(b.String())
+}
+
+func combineAddressCity(address, city string) string {
+	var parts []string
+	if trimmed := strings.TrimSpace(address); trimmed != "" {
+		parts = append(parts, trimmed)
+	}
+	if trimmed := strings.TrimSpace(city); trimmed != "" {
+		parts = append(parts, trimmed)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func orDefault(value, fallback string) string {
