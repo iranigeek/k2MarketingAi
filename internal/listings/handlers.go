@@ -253,10 +253,11 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Printf("rewrite fallback: %v", genErr)
 			fallbackUsed = true
-			section.Content = section.Content + "\n\n" + strings.TrimSpace(req.Instruction)
+			section.Content = generation.ApplyLocalRewrite(section.Content, req.Instruction)
 		}
-	} else if req.Instruction != "" {
-		section.Content = section.Content + "\n\n" + strings.TrimSpace(req.Instruction)
+	} else if strings.TrimSpace(req.Instruction) != "" {
+		fallbackUsed = true
+		section.Content = generation.ApplyLocalRewrite(section.Content, req.Instruction)
 	}
 
 	listing.Sections[idx] = section

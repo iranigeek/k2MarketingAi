@@ -65,13 +65,7 @@ func (heuristicGenerator) Rewrite(_ context.Context, listing storage.Listing, se
 		base = buildIntroCopy(listing)
 	}
 
-	var builder strings.Builder
-	builder.WriteString(strings.TrimSpace(base))
-	if instruction != "" {
-		builder.WriteString(fmt.Sprintf("\n\nInstruktion: %s.", instruction))
-	}
-
-	section.Content = builder.String()
+	section.Content = applyLocalRewrite(base, instruction)
 	return section, nil
 }
 
@@ -198,41 +192,58 @@ func summarizeList(items []string, limit int) string {
 	return fmt.Sprintf("%s och %s", strings.Join(items[:len(items)-1], ", "), last)
 }
 
-func joinGeoInsights(geo storage.GeodataInsights) string {
-	var segments []string
-	if len(geo.PointsOfInterest) > 0 {
-		grouped := map[string][]string{}
-		for _, poi := range geo.PointsOfInterest {
-			group := categorizePOI(poi.Category)
-			entry := fmt.Sprintf("%s (%s)", poi.Name, poi.Distance)
-			grouped[group] = append(grouped[group], entry)
-		}
-		if v := summarizeList(grouped["grocery"], 2); v != "" {
-			segments = append(segments, "Matbutiker: "+v)
-		}
-		if v := summarizeList(append(grouped["restaurant"], grouped["cafe"]...), 3); v != "" {
-			segments = append(segments, "Restauranger/caféer: "+v)
-		}
-		if v := summarizeList(grouped["park"], 2); v != "" {
-			segments = append(segments, "Parker/grönska: "+v)
-		}
-		if v := summarizeList(grouped["gym"], 2); v != "" {
-			segments = append(segments, "Träning: "+v)
+func ApplyLocalRewrite(base, instruction string) string {
+	cleaned := strings.TrimSpace(base)
+	lower := strings.ToLower(instruction)
+
+	// Shorten by keeping the first two sentences when asked for brevity.
+	if strings.Contains(lower, "kort") || strings.Contains(lower, "short") {
+		sentences := splitSentences(cleaned)
+		if len(sentences) > 0 {
+			if len(sentences) > 2 {
+				sentences = sentences[:2]
+			}
+			cleaned = strings.Join(sentences, " ")
 		}
 	}
-	if len(geo.Transit) > 0 {
-		var transit []string
-		for i := 0; i < len(geo.Transit) && i < 2; i++ {
-			transit = append(transit, fmt.Sprintf("%s (%s)", geo.Transit[i].Mode, geo.Transit[i].Description))
+
+	// Light tone adjustments for fallback behaviour when no LLM is available.
+	var tweaks []string
+	switch {
+	case strings.Contains(lower, "sälj"):
+		tweaks = append(tweaks, "Texten är tonad mer säljande och engagerande")
+	case strings.Contains(lower, "formell"):
+		tweaks = append(tweaks, "Texten är mer formell och rak")
+	case strings.Contains(lower, "tydlig") || strings.Contains(lower, "klar"):
+		tweaks = append(tweaks, "Språket är förtydligat utan utfyllnad")
+	case strings.Contains(lower, "längre"):
+		tweaks = append(tweaks, "Texten är utvecklad med mer kontext")
+	}
+
+	if len(tweaks) == 0 {
+		return cleaned
+	}
+
+	return fmt.Sprintf("%s\n\n%s.", cleaned, strings.Join(tweaks, ". "))
+}
+
+func splitSentences(text string) []string {
+	fields := strings.FieldsFunc(text, func(r rune) bool {
+		switch r {
+		case '.', '!', '?':
+			return true
+		default:
+			return false
 		}
-		if summary := summarizeList(transit, len(transit)); summary != "" {
-			segments = append(segments, "Kommunikation: "+summary)
+	})
+
+	var sentences []string
+	for _, part := range fields {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			sentences = append(sentences, trimmed)
 		}
 	}
-	if len(segments) == 0 {
-		return "Inga geodata tillgängliga."
-	}
-	return strings.Join(segments, "; ")
+	return sentences
 }
 
 // NewOpenAI wires the generator to OpenAI's chat completions.
