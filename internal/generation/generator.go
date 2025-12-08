@@ -29,9 +29,13 @@ func NewHeuristic() Generator {
 
 type heuristicGenerator struct{}
 
-func (heuristicGenerator) Generate(_ context.Context, listing storage.Listing) ([]storage.Section, error) {
+func (heuristicGenerator) Generate(_ context.Context, listing storage.Listing) (Result, error) {
 	content := buildFullAd(listing)
-	return []storage.Section{{Slug: "main", Title: "Annons", Content: content}}, nil
+	sections := []storage.Section{{Slug: "main", Title: "Annons", Content: content}}
+	return Result{
+		Sections: sections,
+		FullCopy: composeFullCopyFromSections(sections),
+	}, nil
 }
 
 func buildFullAd(listing storage.Listing) string {
@@ -76,7 +80,7 @@ func (heuristicGenerator) Rewrite(_ context.Context, listing storage.Listing, se
 		base = buildFullAd(listing)
 	}
 
-	section.Content = applyLocalRewrite(base, instruction)
+	section.Content = ApplyLocalRewrite(base, instruction)
 	return section, nil
 }
 

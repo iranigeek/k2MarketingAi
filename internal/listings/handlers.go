@@ -734,6 +734,16 @@ func findSectionIndex(sections []storage.Section, slug string) int {
 	return -1
 }
 
+func formatRooms(rooms float64) string {
+	if rooms == 0 {
+		return ""
+	}
+	if rooms == float64(int(rooms)) {
+		return fmt.Sprintf("%d", int(rooms))
+	}
+	return fmt.Sprintf("%.1f", rooms)
+}
+
 func composeFullCopy(sections []storage.Section) string {
 	parts := make([]string, 0, len(sections))
 	for _, section := range sections {
