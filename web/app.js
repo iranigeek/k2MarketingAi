@@ -5,6 +5,7 @@ const state = {
     versions: [],
     lastText: '',
     uploads: [],
+    listingFilter: '',
 };
 
 function value(id) {
@@ -31,8 +32,18 @@ async function fetchListings() {
         if (!res.ok) throw new Error('Kunde inte hämta listor');
         state.listings = await res.json();
         document.getElementById('stat-total').textContent = state.listings.length;
-        if (state.listings.length) {
-            await selectListing(state.listings[0].id);
+        renderObjectList();
+        let idToSelect = state.selectedId;
+        if (!idToSelect || !state.listings.some(item => item.id === idToSelect)) {
+            idToSelect = state.listings[0]?.id || null;
+        }
+        if (idToSelect) {
+            await selectListing(idToSelect);
+        } else {
+            state.current = null;
+            state.versions = [];
+            state.lastText = '';
+            renderDetail();
         }
     } catch (err) {
         console.error(err);
@@ -107,7 +118,9 @@ async function selectListing(id) {
         if (!res.ok) throw new Error('Kunde inte hämta annons');
         state.current = await res.json();
         state.versions = [];
+        state.lastText = '';
         renderDetail();
+        renderObjectList();
     } catch (err) {
         console.error(err);
     }
@@ -240,6 +253,25 @@ function bindEvents() {
         state.versions = [];
         renderVersions();
     });
+
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', toggleSidebar);
+    }
+    const refreshObjects = document.getElementById('refresh-objects');
+    if (refreshObjects) {
+        refreshObjects.addEventListener('click', fetchListings);
+    }
+    const objectSearch = document.getElementById('object-search');
+    if (objectSearch) {
+        objectSearch.addEventListener('input', handleObjectSearch);
+    }
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            closeSidebar();
+        }
+    });
+    initSidebarState();
 }
 
 function toggleFloorField() {
@@ -297,6 +329,84 @@ function renderVersions() {
         item.appendChild(actions);
         list.appendChild(item);
     });
+}
+
+function renderObjectList() {
+    const container = document.getElementById('object-list');
+    if (!container) return;
+    container.innerHTML = '';
+    const query = (state.listingFilter || '').toLowerCase();
+    const entries = state.listings.filter(item => {
+        if (!query) return true;
+        const haystack = `${item.address || ''} ${item.city || ''} ${item.neighborhood || ''}`.toLowerCase();
+        return haystack.includes(query);
+    });
+
+    if (!entries.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty-state';
+        empty.textContent = state.listings.length
+            ? 'Inga objekt matchar din sökning.'
+            : 'Inga objekt ännu. Skapa din första annons.';
+        container.appendChild(empty);
+        return;
+    }
+
+    entries.forEach(listing => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'object-card';
+        if (listing.id === state.selectedId) {
+            card.classList.add('active');
+        }
+
+        const title = document.createElement('div');
+        title.className = 'object-card__title';
+        title.textContent = listing.address || 'Namnlöst objekt';
+
+        const meta = document.createElement('div');
+        meta.className = 'object-card__meta';
+        meta.textContent = buildListingMeta(listing);
+
+        const status = document.createElement('div');
+        status.className = 'object-card__status';
+        status.textContent = buildListingStatus(listing);
+
+        card.appendChild(title);
+        card.appendChild(meta);
+        card.appendChild(status);
+        card.addEventListener('click', () => selectListing(listing.id));
+        container.appendChild(card);
+    });
+}
+
+function buildListingMeta(listing) {
+    const rooms = formatRoomsValue(Number(listing.rooms || 0));
+    const areaValue = Number(listing.living_area);
+    const area = Number.isFinite(areaValue) && areaValue > 0 ? `${Math.round(areaValue)} kvm` : '';
+    const location = [listing.neighborhood, listing.city].filter(Boolean).join(', ');
+    const homeFacts = rooms && area ? `${rooms} · ${area}` : rooms || area;
+    return [homeFacts, location].filter(Boolean).join(' • ') || 'Detaljer saknas';
+}
+
+function buildListingStatus(listing) {
+    const tone = capitalize(listing.tone) || 'Neutral ton';
+    const length = capitalize(listing.length) || 'Normal längd';
+    return `${tone} • ${length}`;
+}
+
+function formatRoomsValue(value) {
+    if (!Number.isFinite(value) || value <= 0) {
+        return '';
+    }
+    return Number.isInteger(value) ? `${value} rum` : `${value.toFixed(1)} rum`;
+}
+
+function capitalize(value) {
+    if (!value) return '';
+    const str = String(value).trim();
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function applyVersion(index) {
@@ -366,6 +476,43 @@ function setAIStatus(message, busy, hideLater) {
     }
     if (hideLater) {
         setTimeout(() => el.classList.add('hidden'), 2200);
+    }
+}
+
+function handleObjectSearch(event) {
+    state.listingFilter = event.target.value.toLowerCase();
+    renderObjectList();
+}
+
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-open');
+    updateSidebarToggleState();
+}
+
+function closeSidebar() {
+    if (!document.body.classList.contains('sidebar-open')) {
+        return;
+    }
+    document.body.classList.remove('sidebar-open');
+    updateSidebarToggleState();
+}
+
+function initSidebarState() {
+    if (window.innerWidth < 900) {
+        document.body.classList.remove('sidebar-open');
+    }
+    updateSidebarToggleState();
+}
+
+function updateSidebarToggleState() {
+    const toggle = document.getElementById('sidebar-toggle');
+    if (!toggle) return;
+    const open = document.body.classList.contains('sidebar-open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.setAttribute('aria-label', open ? 'Fäll ihop meny' : 'Visa meny');
+    const icon = toggle.querySelector('span');
+    if (icon) {
+        icon.textContent = open ? '✕' : '☰';
     }
 }
 

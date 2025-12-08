@@ -6,46 +6,51 @@
     <title>Premium Mäklarstudio</title>
     <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body class="sidebar-open">
     <aside class="sidebar">
         <div class="sidebar__brand">A</div>
         <nav>
             <a class="sidebar__item active" href="#dashboard">
                 <span class="icon">🏠</span>
-                <span>Dashboard</span>
+                <span class="sidebar__label">Dashboard</span>
             </a>
             <a class="sidebar__item" href="#objects">
                 <span class="icon">📂</span>
-                <span>Mina objekt</span>
+                <span class="sidebar__label">Mina objekt</span>
             </a>
             <a class="sidebar__item" href="#generator">
                 <span class="icon">✨</span>
-                <span>Annonsgenerator</span>
+                <span class="sidebar__label">Annonsgenerator</span>
             </a>
             <a class="sidebar__item" href="#images">
                 <span class="icon">🖼</span>
-                <span>Bildhantering</span>
+                <span class="sidebar__label">Bildhantering</span>
             </a>
             <a class="sidebar__item" href="#templates">
                 <span class="icon">📑</span>
-                <span>Mallar</span>
+                <span class="sidebar__label">Mallar</span>
             </a>
             <a class="sidebar__item" href="#stats">
                 <span class="icon">📊</span>
-                <span>Statistik</span>
+                <span class="sidebar__label">Statistik</span>
             </a>
             <a class="sidebar__item" href="#settings">
                 <span class="icon">⚙️</span>
-                <span>Inställningar</span>
+                <span class="sidebar__label">Inställningar</span>
             </a>
         </nav>
     </aside>
 
     <div class="shell">
         <header class="topbar">
-            <div>
-                <p class="eyebrow">Premium Mäklarstudio</p>
-                <h1>AI-annons på 2–5 minuter</h1>
+            <div class="topbar__left">
+                <button class="ghost icon-button" id="sidebar-toggle" type="button" aria-expanded="true" aria-label="Fäll ihop meny">
+                    <span aria-hidden="true">☰</span>
+                </button>
+                <div>
+                    <p class="eyebrow">Premium Mäklarstudio</p>
+                    <h1>AI-annons på 2–5 minuter</h1>
+                </div>
             </div>
             <div class="topbar__actions">
                 <button class="ghost">Importera objekt</button>
@@ -73,6 +78,22 @@
                 <button class="secondary">Skapa ny annons</button>
                 <button class="secondary">Importera objekt</button>
                 <button class="secondary">Ladda upp bilder</button>
+            </div>
+        </section>
+
+        <section class="objects-panel" id="objects">
+            <div class="objects-panel__header">
+                <div>
+                    <p class="eyebrow">Mina objekt</p>
+                    <h2>Översikt över annonser</h2>
+                </div>
+                <div class="objects-panel__actions">
+                    <input type="search" id="object-search" placeholder="Sök adress, område eller stad" aria-label="Sök objekt">
+                    <button class="ghost" id="refresh-objects" type="button">Uppdatera</button>
+                </div>
+            </div>
+            <div id="object-list" class="object-list">
+                <p class="empty-state">Inga objekt ännu. Skapa din första annons.</p>
             </div>
         </section>
 

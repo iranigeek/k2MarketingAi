@@ -10,6 +10,7 @@
     --orange: #e89b23;
     --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
     --radius: 16px;
+    --sidebar-width: 260px;
 }
 
 * { box-sizing: border-box; }
@@ -19,6 +20,10 @@ body {
     background: var(--black);
     color: var(--text);
     line-height: 1.6;
+    --shell-offset: var(--sidebar-width);
+}
+body:not(.sidebar-open) {
+    --shell-offset: 0px;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -27,15 +32,20 @@ button { font: inherit; cursor: pointer; border: none; }
 .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
-    width: 92px;
+    width: var(--sidebar-width);
     background: linear-gradient(180deg, #0c0c0c, #0f0f0f 60%, #0b0b0b);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 20px 12px;
+    padding: 24px 16px;
     gap: 12px;
     box-shadow: var(--shadow);
+    z-index: 10;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+}
+body.sidebar-open .sidebar {
+    transform: translateX(0);
 }
 .sidebar__brand {
     width: 48px;
@@ -66,8 +76,15 @@ button { font: inherit; cursor: pointer; border: none; }
     border: 1px solid transparent;
     transition: all 0.2s ease;
     position: relative;
+    white-space: nowrap;
+    overflow: hidden;
 }
 .sidebar__item .icon { filter: saturate(0) brightness(1.2); }
+.sidebar__label {
+    flex: 1;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
 .sidebar__item:hover { background: rgba(255,255,255,0.04); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 .sidebar__item.active {
     border-color: var(--gold);
@@ -82,15 +99,34 @@ button { font: inherit; cursor: pointer; border: none; }
     border-radius: 99px;
     background: linear-gradient(180deg, var(--gold), var(--orange));
 }
-
-.shell { margin-left: 92px; padding: 20px 24px 32px; }
+.shell {
+    margin-left: var(--shell-offset);
+    padding: 24px 32px 40px;
+    transition: margin-left 0.3s ease, padding 0.3s ease;
+    min-height: 100vh;
+}
 .topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
 }
 .topbar__actions { display: flex; gap: 10px; }
+.topbar__left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.icon-button {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 20px;
+    padding: 0;
+}
+.icon-button span { display: block; line-height: 1; }
 
 .eyebrow { text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--muted); margin: 0; }
 .muted { color: var(--muted); }
@@ -124,6 +160,82 @@ button { font: inherit; cursor: pointer; border: none; }
     gap: 12px;
     margin-bottom: 16px;
 }
+.objects-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow);
+}
+.objects-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.objects-panel__actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.objects-panel__actions input {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: #0f0f0f;
+    color: var(--text);
+    min-width: 220px;
+}
+.object-list {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+.object-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    text-align: left;
+    color: var(--text);
+    transition: border 0.2s ease, transform 0.2s ease;
+}
+.object-card.active {
+    border-color: var(--gold);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+}
+.object-card:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.15); }
+.object-card__title {
+    font-weight: 600;
+    font-size: 15px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.object-card__meta,
+.object-card__status {
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.empty-state {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+}
+
 .stat-card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -136,7 +248,7 @@ button { font: inherit; cursor: pointer; border: none; }
 
 .workspace {
     display: grid;
-    grid-template-columns: 360px 1fr 280px;
+    grid-template-columns: 360px minmax(0,1fr) 280px;
     gap: 14px;
     align-items: start;
 }
@@ -249,8 +361,38 @@ button { font: inherit; cursor: pointer; border: none; }
 }
 .version-item button { background: transparent; color: var(--gold); border: 1px solid var(--border); padding: 6px 8px; border-radius: 10px; }
 
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
+    .workspace {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    :root { --sidebar-width: 220px; }
+    body { --shell-offset: 0; }
+    .shell { padding: 20px; }
+    .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .topbar__actions { flex-wrap: wrap; justify-content: flex-start; }
+    .objects-panel__header { flex-direction: column; align-items: flex-start; }
+    .objects-panel__actions { width: 100%; }
+    .objects-panel__actions input { flex: 1; min-width: 0; width: 100%; }
+    .object-list { max-height: none; }
     .workspace { grid-template-columns: 1fr; }
-    .sidebar { position: static; width: 100%; flex-direction: row; justify-content: center; height: auto; }
-    .shell { margin: 0; }
+}
+
+@media (max-width: 720px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .quick-actions { flex-direction: column; align-items: stretch; }
+    .panel { padding: 16px; }
+    .topbar__left { width: 100%; }
+}
+
+@media (max-width: 540px) {
+    .objects-panel__actions { flex-direction: column; align-items: stretch; }
+    .objects-panel__actions button { width: 100%; }
+    .editor__header, .topbar__actions { flex-direction: column; align-items: stretch; }
 }
