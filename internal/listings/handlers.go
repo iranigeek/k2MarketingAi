@@ -503,6 +503,14 @@ func parseMultipartRequest(r *http.Request) (CreateListingRequest, *uploadPayloa
 		Instructions:   strings.TrimSpace(r.FormValue("instructions")),
 	}
 
+	if sectionsRaw := strings.TrimSpace(r.FormValue("sections")); sectionsRaw != "" {
+		var sections []SectionInput
+		if err := json.Unmarshal([]byte(sectionsRaw), &sections); err != nil {
+			return req, nil, fmt.Errorf("invalid sections payload: %w", err)
+		}
+		req.Sections = sections
+	}
+
 	if highlightsRaw := strings.TrimSpace(r.FormValue("highlights")); highlightsRaw != "" {
 		req.Highlights = splitHighlights(highlightsRaw)
 	}

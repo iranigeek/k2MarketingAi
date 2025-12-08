@@ -79,45 +79,275 @@
             </header>
 
             <main class="workspace">
+                <section class="catalog">
+                    <aside class="filters">
+                        <div class="filters__header">
+                            <p class="eyebrow">Snabbfilter</p>
+                            <h2>Utforska objekt</h2>
+                            <p class="muted">Sök i ditt bibliotek efter rätt tonläge, prisklass och bostadstyp.</p>
+                        </div>
+                        <label for="quick-search">Sök efter adress eller område</label>
+                        <div class="search-box">
+                            <input id="quick-search" type="search" placeholder="Ex. Skolgatan eller Södermalm">
+                            <button class="icon-btn" type="button" aria-label="Sök">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke-width="1.8" fill="none" stroke="currentColor"/><path d="m15.5 15.5 4 4" stroke-width="1.8" stroke="currentColor" stroke-linecap="round"/></svg>
+                            </button>
+                        </div>
+                        <div class="filter-group">
+                            <p class="filter-label">Publicering</p>
+                            <div class="pill-group">
+                                <button class="pill active" type="button">Till salu</button>
+                                <button class="pill" type="button">Uthyrning</button>
+                                <button class="pill" type="button">Arkiv</button>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <p class="filter-label">Bostadstyp</p>
+                            <div class="checkbox-row">
+                                <label><input type="checkbox" checked> Lägenhet</label>
+                                <label><input type="checkbox" checked> Villa</label>
+                                <label><input type="checkbox"> Radhus</label>
+                                <label><input type="checkbox"> Nyproduktion</label>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <p class="filter-label">Pris (tkr)</p>
+                            <div class="slider-stack">
+                                <div class="slider-labels">
+                                    <span>0</span><span>15 000</span><span>30 000</span>
+                                </div>
+                                <input type="range" min="0" max="30000000" value="15000000">
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <p class="filter-label">Yta & rum</p>
+                            <div class="grid-2">
+                                <div>
+                                    <label for="size-min">Boarea (min)</label>
+                                    <input id="size-min" type="number" placeholder="40">
+                                </div>
+                                <div>
+                                    <label for="rooms-min">Rum (min)</label>
+                                    <input id="rooms-min" type="number" placeholder="2">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <p class="filter-label">Ton</p>
+                            <div class="chip-group">
+                                <button class="chip ghost" type="button">Neutral</button>
+                                <button class="chip ghost" type="button">Säljande</button>
+                                <button class="chip ghost" type="button">Lyxig</button>
+                                <button class="chip ghost" type="button">Familjär</button>
+                                <button class="chip ghost" type="button">Faktabaserad</button>
+                            </div>
+                        </div>
+                        <button class="primary full">+ Ny annons</button>
+                    </aside>
+
+                    <section class="catalog__content">
+                        <header class="catalog__header">
+                            <div>
+                                <p class="eyebrow">Galleri</p>
+                                <h2>Alla dina objekt</h2>
+                                <p class="muted">Kortkort översikt som känns som ett riktigt bostadsgalleri. Klicka på ett kort för detaljer och omskrivningar.</p>
+                            </div>
+                            <div class="catalog__actions">
+                                <button class="secondary" type="button" id="grid-refresh">Uppdatera</button>
+                                <button class="secondary" type="button" id="compact-toggle">Kompakt läge</button>
+                            </div>
+                        </header>
+                        <div id="listing-grid" class="listing-grid"></div>
+                    </section>
+                </section>
                 <section class="panel">
                     <div class="panel__header">
-                        <h2>Nytt objekt</h2>
+                        <div>
+                            <p class="eyebrow">Input</p>
+                            <h2>Fyll i fakta – klar annons p&aring; minuter</h2>
+                            <p class="muted">Tv&aring;kolumnslayout: fakta till v&auml;nster, text till h&ouml;ger. Ton, l&auml;ngd och omskrivningar styrs med ett klick.</p>
+                        </div>
                     </div>
-                    <form id="listing-form">
-                        <label for="address">Adress</label>
-                        <input id="address" name="address" type="text" placeholder="Ex. Skolgatan 12, Stockholm" required>
+                    <form id="listing-form" class="form-grid">
+                        <div class="form-section">
+                            <header>
+                                <p class="eyebrow">Bostad</p>
+                                <h3>Fakta</h3>
+                            </header>
+                            <label for="address">Adress</label>
+                            <input id="address" name="address" type="text" placeholder="Ex. Skolgatan 12" required>
+                            <div class="grid-2">
+                                <div>
+                                    <label for="city">Stad</label>
+                                    <input id="city" name="city" type="text" placeholder="Stockholm">
+                                </div>
+                                <div>
+                                    <label for="neighborhood">Omr&aring;de</label>
+                                    <input id="neighborhood" name="neighborhood" type="text" placeholder="S&ouml;dermalm">
+                                </div>
+                            </div>
+                            <div class="grid-2">
+                                <div>
+                                    <label for="municipality">Kommun</label>
+                                    <input id="municipality" name="municipality" type="text" placeholder="Stockholm">
+                                </div>
+                                <div>
+                                    <label for="property-type">Bostadstyp</label>
+                                    <input id="property-type" name="property_type" type="text" placeholder="Bostadsr&auml;tt, villa...">
+                                    </div>
+                                </div>
+                            <div class="grid-3">
+                                <div>
+                                    <label for="living-area">Boarea (kvm)</label>
+                                    <input id="living-area" name="living_area" type="number" min="0" step="0.5" placeholder="82">
+                                </div>
+                                <div>
+                                    <label for="rooms">Antal rum</label>
+                                    <input id="rooms" name="rooms" type="number" min="0" step="0.5" placeholder="3.5">
+                                </div>
+                                <div>
+                                    <label for="floor">V&aring;ning</label>
+                                    <input id="floor" name="floor" type="text" placeholder="3/6, hiss">
+                                </div>
+                            </div>
+                            <div class="grid-3">
+                                <div>
+                                    <label for="built-year">Bygg&aring;r</label>
+                                    <input id="built-year" name="built_year" type="text" placeholder="1932">
+                                </div>
+                                <div>
+                                    <label for="renovated-year">Renoverat</label>
+                                    <input id="renovated-year" name="renovated_year" type="text" placeholder="2020">
+                                </div>
+                                <div>
+                                    <label for="plan">Planl&ouml;sning (kort)</label>
+                                    <input id="plan" name="plan" type="text" placeholder="Social halv&ouml;ppen planl&ouml;sning">
+                                </div>
+                            </div>
+                            <label for="kitchen">K&ouml;k</label>
+                            <textarea id="kitchen" rows="2" placeholder="Platsbyggt, goda arbetsytor, integrerade vitvaror..."></textarea>
+                            <label for="living">Vardagsrum</label>
+                            <textarea id="living" rows="2" placeholder="Ljust med stora f&ouml;nster, plats f&ouml;r soffgrupp..."></textarea>
+                            <label for="bedroom">Sovrum</label>
+                            <textarea id="bedroom" rows="2" placeholder="Rofyllt med garderober och lugnt l&auml;ge..."></textarea>
+                            <label for="bathroom">Badrum</label>
+                            <textarea id="bathroom" rows="2" placeholder="Kaklat, kombimaskin, golvv&auml;rme..."></textarea>
+                            <label for="outdoor">Balkong/uteplats</label>
+                            <textarea id="outdoor" rows="2" placeholder="Balkong i s&ouml;derl&auml;ge, plats f&ouml;r caf&eacute;set..."></textarea>
+                            <div class="grid-2">
+                                <div>
+                                    <label for="storage">F&ouml;rvaring</label>
+                                    <input id="storage" type="text" placeholder="K&auml;llarf&ouml;rr&aring;d, garderober">
+                                </div>
+                                <div>
+                                    <label for="parking">Parkering</label>
+                                    <input id="parking" type="text" placeholder="P-plats i garage, k&ouml; via f&ouml;rening">
+                                </div>
+                            </div>
+                            <div class="grid-3">
+                                <div>
+                                    <label for="fee">Avgift (SEK/m&aring;n)</label>
+                                    <input id="fee" name="fee" type="number" min="0" step="100" placeholder="3200">
+                                </div>
+                                <div>
+                                    <label for="operating-cost">Driftkostnad</label>
+                                    <input id="operating-cost" type="text" placeholder="ca 600 kr/m&aring;n">
+                                </div>
+                                <div>
+                                    <label for="price">Pris</label>
+                                    <input id="price" type="text" placeholder="3 250 000 kr">
+                                </div>
+                            </div>
+                        </div>
 
-                        <label for="tone">Tone of Voice</label>
-                        <select id="tone" name="tone">
-                            <option value="Exklusiv och sofistikerad">Exklusiv och sofistikerad</option>
-                            <option value="Varm och familj&auml;r" selected>Varm och familj&auml;r</option>
-                            <option value="Urban och trendig">Urban och trendig</option>
-                        </select>
+                        <div class="form-section">
+                            <header>
+                                <p class="eyebrow">F&ouml;rening &amp; omr&aring;de</p>
+                                <h3>Det viktiga runtomkring</h3>
+                            </header>
+                            <label for="association-name">F&ouml;rening</label>
+                            <input id="association-name" type="text" placeholder="Brf Solgl&auml;ntan">
+                            <label for="association-economy">Ekonomi</label>
+                            <textarea id="association-economy" rows="2" placeholder="Stabil ekonomi, god kassa..."></textarea>
+                            <div class="grid-2">
+                                <div>
+                                    <label for="renovations-done">Genomf&ouml;rda renoveringar</label>
+                                    <textarea id="renovations-done" rows="2" placeholder="Stambyte 2015, fasad 2019..."></textarea>
+                                </div>
+                                <div>
+                                    <label for="renovations-planned">Planerade renoveringar</label>
+                                    <textarea id="renovations-planned" rows="2" placeholder="Tak&ouml;versyn 2026..."></textarea>
+                                </div>
+                            </div>
+                            <label for="common-areas">Gemensamma utrymmen</label>
+                            <textarea id="common-areas" rows="2" placeholder="Innerg&aring;rd, tv&auml;ttstuga, cykelf&ouml;rr&aring;d..."></textarea>
 
-                        <label for="audience">M&aring;lgrupp</label>
-                        <input id="audience" name="audience" type="text" placeholder="Barnfamiljer, f&ouml;rstag&aring;ngsk&ouml;pare...">
+                            <div class="grid-2">
+                                <div>
+                                    <label for="communications">Kommunikationer</label>
+                                    <textarea id="communications" rows="2" placeholder="Tunnelbana 3 min, buss 2 min..."></textarea>
+                                </div>
+                                <div>
+                                    <label for="service">Service</label>
+                                    <textarea id="service" rows="2" placeholder="Coop runt h&ouml;rnet, gym i huset..."></textarea>
+                                </div>
+                            </div>
+                            <div class="grid-2">
+                                <div>
+                                    <label for="schools">Skolor &amp; f&ouml;rskolor</label>
+                                    <textarea id="schools" rows="2" placeholder="Förskola inom 200 m, populär F-9 skola..."></textarea>
+                                </div>
+                                <div>
+                                    <label for="nature">Natur</label>
+                                    <textarea id="nature" rows="2" placeholder="Nära park, vatten eller motionsspår..."></textarea>
+                                </div>
+                            </div>
+                        </div>
 
-                        <label for="highlights">Viktiga s&auml;ljargument (komma-separerade)</label>
-                        <input id="highlights" name="highlights" type="text" placeholder="L&aring;g avgift, balkong i s&ouml;derl&auml;ge">
+                        <div class="form-section">
+                            <header>
+                                <p class="eyebrow">Meta</p>
+                                <h3>Ton &amp; export</h3>
+                            </header>
+                            <label for="tone">Ton</label>
+                            <select id="tone" name="tone">
+                                <option value="Neutral">Neutral</option>
+                                <option value="S&auml;ljande">S&auml;ljande</option>
+                                <option value="Lyxig">Lyxig</option>
+                                <option value="Familj&auml;r" selected>Familj&auml;r</option>
+                                <option value="Faktabaserad">Faktabaserad</option>
+                            </select>
+                            <label for="audience">M&aring;lgrupp (valfritt)</label>
+                            <input id="audience" name="audience" type="text" placeholder="Barnfamiljer, f&ouml;rstag&aring;ngsk&ouml;pare...">
+                            <label for="length">L&auml;ngd</label>
+                            <input id="length" type="range" min="1" max="3" value="2" aria-label="Annonsl&auml;ngd">
+                            <div class="slider-labels">
+                                <span>kort</span>
+                                <span>normal</span>
+                                <span>l&aring;ng</span>
+                            </div>
+                            <label for="instructions">Ytterligare instruktioner</label>
+                            <textarea id="instructions" name="instructions" rows="3" placeholder="Betona ljus och balkong. Korta meningar."></textarea>
+                            <label for="advantages">F&ouml;rdelar (en per rad)</label>
+                            <textarea id="advantages" rows="3" placeholder="L&aring;g avgift
+Balkong i s&ouml;derl&auml;ge
+Hiss till l&auml;genhetsplan"></textarea>
+                            <label for="highlights">Snabbt listade highlights (komma-separerade)</label>
+                            <input id="highlights" name="highlights" type="text" placeholder="Tak&ouml;verh&ouml;jning, vy mot innerg&aring;rd">
+                            <label for="photo">Ladda upp bild (frivilligt)</label>
+                            <input id="photo" name="photo" type="file" accept="image/*">
+                            <small class="help-text">St&ouml;djer JPG/PNG upp till 5 MB.</small>
+                        </div>
 
-                        <label for="fee">Avgift (SEK)</label>
-                        <input id="fee" name="fee" type="number" min="0" step="100" placeholder="3200">
-
-                        <label for="living-area">Boarea (kvm)</label>
-                        <input id="living-area" name="living_area" type="number" min="0" step="0.5" placeholder="82">
-
-                        <label for="rooms">Antal rum</label>
-                        <input id="rooms" name="rooms" type="number" min="0" step="0.5" placeholder="3.5">
-
-                        <label for="instructions">Ton &amp; instruktioner</label>
-                        <textarea id="instructions" name="instructions" rows="3" placeholder="Kort, sn&auml;rtig ton. Betona den stora balkongen."></textarea>
-
-                        <label for="photo">Ladda upp bild</label>
-                        <input id="photo" name="photo" type="file" accept="image/*">
-                        <small class="help-text">St&ouml;djer JPG/PNG upp till 5 MB.</small>
-
-                        <button type="submit">Skapa utkast</button>
-                        <p id="form-message" role="status"></p>
+                        <div class="form-section">
+                            <header>
+                                <p class="eyebrow">Klart?</p>
+                                <h3>Generera</h3>
+                            </header>
+                            <p class="muted">Tryck p&aring; knappen s&aring; genereras sektioner som kan omskrivas i h&ouml;gra panelen. Allt sparas som historik.</p>
+                            <button type="submit">Skapa utkast</button>
+                            <p id="form-message" role="status"></p>
+                        </div>
                     </form>
 
                     <div class="panel__header panel__header--list">
@@ -143,8 +373,26 @@
                             <button class="secondary" id="add-section-btn" disabled>+ L&auml;gg till sektion</button>
                         </div>
                     </div>
+                    <div class="detail__toolbar">
+                        <div class="chip-group">
+                            <button class="chip" data-rewrite-all="short">Skapa kort version</button>
+                            <button class="chip" data-rewrite-all="long">Skapa l&auml;ngre version</button>
+                            <button class="chip" data-rewrite-all="sales">Mer s&auml;ljande</button>
+                            <button class="chip" data-rewrite-all="formal">Mer formellt</button>
+                        </div>
+                        <div class="chip-group">
+                            <select id="tone-switcher" class="tone-switcher">
+                                <option value="Neutral">Neutral</option>
+                                <option value="S&auml;ljande">S&auml;ljande</option>
+                                <option value="Lyxig">Lyxig</option>
+                                <option value="Familj&auml;r">Familj&auml;r</option>
+                                <option value="Faktabaserad">Faktabaserad</option>
+                            </select>
+                            <button class="chip" id="apply-tone-btn">Regenerera med ton</button>
+                        </div>
+                    </div>
                     <div id="detail-body" class="detail__body">
-                        <p class="muted">N&auml;r du v&auml;ljer ett objekt visas sektionerna h&auml;r med m&ouml;jlighet att omskriva respektive del.</p>
+                        <p class="muted">N&auml;r du v&auml;ljer ett objekt visas sektionerna h&auml;r med m&ouml;jlighet att omskriva respektive del. Markera en mening, klicka p&aring; omskrivning och f&aring; direkt variation.</p>
                     </div>
                 </section>
             </main>
