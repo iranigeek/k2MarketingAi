@@ -510,11 +510,17 @@ body {
 
 .workspace {
     display: grid;
-    grid-template-columns: minmax(340px, 420px) 1fr;
+    grid-template-columns: minmax(360px, 520px) 1fr;
+    grid-auto-rows: minmax(0, auto);
     gap: 1.5rem;
     padding: 0 1.5rem 2rem;
     max-width: 1400px;
     margin: 0 auto;
+}
+
+/* Gör katalogdelen helbredd ovanför tvåkolumnslayouten för att undvika överlapp. */
+.catalog {
+    grid-column: 1 / -1;
 }
 
 .panel {
