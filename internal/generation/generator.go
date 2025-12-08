@@ -65,7 +65,7 @@ func (heuristicGenerator) Rewrite(_ context.Context, listing storage.Listing, se
 		base = buildIntroCopy(listing)
 	}
 
-	section.Content = applyLocalRewrite(base, instruction)
+	section.Content = ApplyLocalRewrite(base, instruction)
 	return section, nil
 }
 
@@ -489,4 +489,60 @@ func desiredWordCount(meta storage.MetaInfo) int {
 		return meta.DesiredWordCount
 	}
 	return 280
+}
+
+func joinGeoInsights(geo storage.GeodataInsights) string {
+	if len(geo.PointsOfInterest) == 0 && len(geo.Transit) == 0 {
+		return ""
+	}
+
+	var parts []string
+	if len(geo.PointsOfInterest) > 0 {
+		var poiSummaries []string
+		for _, poi := range geo.PointsOfInterest {
+			name := strings.TrimSpace(poi.Name)
+			category := strings.TrimSpace(poi.Category)
+			distance := strings.TrimSpace(poi.Distance)
+
+			var poiParts []string
+			if name != "" {
+				poiParts = append(poiParts, name)
+			}
+			if category != "" {
+				poiParts = append(poiParts, strings.ToLower(category))
+			}
+			if distance != "" {
+				poiParts = append(poiParts, distance)
+			}
+
+			if summary := strings.Join(poiParts, ", "); summary != "" {
+				poiSummaries = append(poiSummaries, summary)
+			}
+		}
+		if len(poiSummaries) > 0 {
+			parts = append(parts, fmt.Sprintf("POI: %s", strings.Join(poiSummaries, "; ")))
+		}
+	}
+
+	if len(geo.Transit) > 0 {
+		var transitSummaries []string
+		for _, transit := range geo.Transit {
+			mode := strings.TrimSpace(transit.Mode)
+			desc := strings.TrimSpace(transit.Description)
+
+			switch {
+			case mode != "" && desc != "":
+				transitSummaries = append(transitSummaries, fmt.Sprintf("%s (%s)", mode, desc))
+			case desc != "":
+				transitSummaries = append(transitSummaries, desc)
+			case mode != "":
+				transitSummaries = append(transitSummaries, mode)
+			}
+		}
+		if len(transitSummaries) > 0 {
+			parts = append(parts, fmt.Sprintf("Transit: %s", strings.Join(transitSummaries, "; ")))
+		}
+	}
+
+	return strings.Join(parts, " | ")
 }
