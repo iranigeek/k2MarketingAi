@@ -3,38 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Premium Mäklarstudio</title>
+    <title>Broker AI</title>
     <link rel="stylesheet" href="/styles.css">
 </head>
-<body class="sidebar-open">
+<body class="sidebar-open view-objects">
     <aside class="sidebar">
-        <div class="sidebar__brand">A</div>
+        <div class="sidebar__brand">BA</div>
         <nav>
-            <a class="sidebar__item active" href="#dashboard">
-                <span class="icon">🏠</span>
-                <span class="sidebar__label">Dashboard</span>
-            </a>
-            <a class="sidebar__item" href="#objects">
+            <a class="sidebar__item active" href="#" data-view="objects">
                 <span class="icon">📂</span>
                 <span class="sidebar__label">Mina objekt</span>
             </a>
-            <a class="sidebar__item" href="#generator">
-                <span class="icon">✨</span>
+            <a class="sidebar__item" href="#" data-view="generator">
+                <span class="icon">🪄</span>
                 <span class="sidebar__label">Annonsgenerator</span>
             </a>
-            <a class="sidebar__item" href="#images">
-                <span class="icon">🖼</span>
-                <span class="sidebar__label">Bildhantering</span>
-            </a>
-            <a class="sidebar__item" href="#templates">
-                <span class="icon">📑</span>
-                <span class="sidebar__label">Mallar</span>
-            </a>
-            <a class="sidebar__item" href="#stats">
+            <a class="sidebar__item" href="#" data-view="stats">
                 <span class="icon">📊</span>
                 <span class="sidebar__label">Statistik</span>
             </a>
-            <a class="sidebar__item" href="#settings">
+            <a class="sidebar__item" href="#" data-view="images">
+                <span class="icon">🖼</span>
+                <span class="sidebar__label">Bildhantering</span>
+            </a>
+            <a class="sidebar__item" href="#" data-view="templates">
+                <span class="icon">🧩</span>
+                <span class="sidebar__label">Mallar</span>
+            </a>
+            <a class="sidebar__item" href="#" data-view="settings">
                 <span class="icon">⚙️</span>
                 <span class="sidebar__label">Inställningar</span>
             </a>
@@ -47,215 +43,248 @@
                 <button class="ghost icon-button" id="sidebar-toggle" type="button" aria-expanded="true" aria-label="Fäll ihop meny">
                     <span aria-hidden="true">☰</span>
                 </button>
-                <div>
-                    <p class="eyebrow">Premium Mäklarstudio</p>
-                    <h1>AI-annons på 2–5 minuter</h1>
+                <div id="topbar-copy">
+                    <p class="eyebrow">Automatiserad annonsstudio</p>
+                    <h1 id="topbar-title">Annonsgenerator</h1>
+                    <p class="muted" id="topbar-subtitle">Skapa och omskriv annonser.</p>
                 </div>
             </div>
             <div class="topbar__actions">
-                <button class="ghost">Importera objekt</button>
-                <button class="primary">Skapa ny annons</button>
+                <button class="secondary" data-view-trigger="objects">Mina objekt</button>
+                <button class="primary" data-view-trigger="generator">Skapa annons</button>
             </div>
         </header>
 
-        <section class="dashboard" id="dashboard">
-            <div class="stat-card">
-                <p class="eyebrow">Skapade annonser</p>
-                <h3 id="stat-total">0</h3>
-                <p class="muted">Senaste 30 dagarna</p>
-            </div>
-            <div class="stat-card">
-                <p class="eyebrow">Omskrivningar</p>
-                <h3 id="stat-rewrites">0</h3>
-                <p class="muted">Användningar denna vecka</p>
-            </div>
-            <div class="stat-card">
-                <p class="eyebrow">Genomsnittlig redigeringstid</p>
-                <h3 id="stat-time">2:30</h3>
-                <p class="muted">Per annons</p>
-            </div>
-            <div class="quick-actions">
-                <button class="secondary">Skapa ny annons</button>
-                <button class="secondary">Importera objekt</button>
-                <button class="secondary">Ladda upp bilder</button>
-            </div>
-        </section>
+        <div id="view-generator" class="view">
+            <main class="workspace">
+                <section class="panel input-panel">
+                    <header>
+                        <p class="eyebrow">Fakta om bostaden</p>
+                        <h2>Minimalt med fält</h2>
+                    </header>
+                    <form id="listing-form" class="minimal-form">
+                        <div class="field">
+                            <label for="address">Adress*</label>
+                            <input id="address" name="address" type="text" placeholder="Storgatan 15" required>
+                        </div>
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="neighborhood">Område</label>
+                                <input id="neighborhood" name="neighborhood" type="text" placeholder="Vasastan">
+                            </div>
+                            <div class="field">
+                                <label for="city">Stad</label>
+                                <input id="city" name="city" type="text" placeholder="Stockholm">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="property-type">Bostadstyp</label>
+                                <select id="property-type" name="property_type">
+                                    <option value="lägenhet">Lägenhet</option>
+                                    <option value="villa">Villa</option>
+                                    <option value="radhus">Radhus</option>
+                                    <option value="parhus">Parhus</option>
+                                    <option value="fritidshus">Fritidshus</option>
+                                    <option value="bostad">Annat</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="rooms">Antal rum</label>
+                                <input id="rooms" name="rooms" type="number" min="0" step="0.5" placeholder="3">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="living-area">Boarea (kvm)</label>
+                                <input id="living-area" name="living_area" type="number" min="0" step="0.5" placeholder="82">
+                            </div>
+                            <div class="field optional" id="floor-field">
+                                <label for="floor">Våning (för lägenhet)</label>
+                                <input id="floor" name="floor" type="text" placeholder="3/6, hiss">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <label class="checkbox">
+                                <input type="checkbox" id="balcony" name="balcony"> Balkong/uteplats
+                            </label>
+                            <div class="field">
+                                <label for="condition">Skick</label>
+                                <select id="condition" name="condition">
+                                    <option value="">- Välj -</option>
+                                    <option value="Renoverad">Renoverad</option>
+                                    <option value="Bra skick">Bra skick</option>
+                                    <option value="Visst renoveringsbehov">Visst renoveringsbehov</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="field optional">
+                                <label for="association">Föreningens namn</label>
+                                <input id="association" name="association" type="text" placeholder="Brf Exempel">
+                            </div>
+                            <div class="field optional">
+                                <label for="highlights">Fördelar (komma-separerat)</label>
+                                <input id="highlights" name="highlights" type="text" placeholder="Balkong, Låg avgift">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="field">
+                                <label for="tone">Ton</label>
+                                <select id="tone" name="tone">
+                                    <option>Neutral</option>
+                                    <option>Säljande</option>
+                                    <option>Lyxig</option>
+                                    <option>Familjär</option>
+                                    <option>Saklig</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="length">Längd</label>
+                                <select id="length" name="length">
+                                    <option value="kort">Kort (140-180 ord)</option>
+                                    <option value="normal" selected>Normal (250-300 ord)</option>
+                                    <option value="lång">Lång (350-450 ord)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button type="submit" class="primary">Generera annons</button>
+                            <p id="form-message" role="status"></p>
+                        </div>
+                    </form>
 
-        <section class="objects-panel" id="objects">
-            <div class="objects-panel__header">
-                <div>
-                    <p class="eyebrow">Mina objekt</p>
-                    <h2>Översikt över annonser</h2>
-                </div>
-                <div class="objects-panel__actions">
-                    <input type="search" id="object-search" placeholder="Sök adress, område eller stad" aria-label="Sök objekt">
-                    <button class="ghost" id="refresh-objects" type="button">Uppdatera</button>
-                </div>
-            </div>
-            <div id="object-list" class="object-list">
-                <p class="empty-state">Inga objekt ännu. Skapa din första annons.</p>
-            </div>
-        </section>
+                    <div class="upload-block">
+                        <div class="upload-header">
+                            <div>
+                                <p class="eyebrow">Ladda upp filer</p>
+                                <p class="muted">Bilder, planritningar eller PDF:er för AI-analys.</p>
+                            </div>
+                            <button class="ghost" id="upload-btn">Välj filer</button>
+                        </div>
+                        <div class="dropzone" id="dropzone">
+                            <input type="file" id="file-input" multiple hidden>
+                            <p>Drag & släpp filer här eller klicka för att ladda upp</p>
+                            <div class="upload-icons">
+                                <span>🖼</span><span>📄</span><span>📎</span><span>📷</span>
+                            </div>
+                        </div>
+                        <div id="upload-list" class="upload-list"></div>
+                    </div>
+                </section>
 
-        <main class="workspace" id="generator">
-            <section class="panel input-panel">
-                <header>
-                    <p class="eyebrow">Fakta om bostaden</p>
-                    <h2>Minimalt med fält</h2>
-                </header>
-                <form id="listing-form" class="minimal-form">
-                    <div class="field">
-                        <label for="address">Adress*</label>
-                        <input id="address" name="address" type="text" placeholder="Storgatan 15" required>
-                    </div>
-                    <div class="grid-2">
-                        <div class="field">
-                            <label for="neighborhood">Område</label>
-                            <input id="neighborhood" name="neighborhood" type="text" placeholder="Vasastan">
-                        </div>
-                        <div class="field">
-                            <label for="city">Stad</label>
-                            <input id="city" name="city" type="text" placeholder="Stockholm">
-                        </div>
-                    </div>
-                    <div class="grid-2">
-                        <div class="field">
-                            <label for="property-type">Bostadstyp</label>
-                            <select id="property-type" name="property_type">
-                                <option value="lägenhet">Lägenhet</option>
-                                <option value="villa">Villa</option>
-                                <option value="radhus">Radhus</option>
-                                <option value="parhus">Parhus</option>
-                                <option value="fritidshus">Fritidshus</option>
-                                <option value="bostad">Annat</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="rooms">Antal rum</label>
-                            <input id="rooms" name="rooms" type="number" min="0" step="0.5" placeholder="3">
-                        </div>
-                    </div>
-                    <div class="grid-2">
-                        <div class="field">
-                            <label for="living-area">Boarea (kvm)</label>
-                            <input id="living-area" name="living_area" type="number" min="0" step="0.5" placeholder="82">
-                        </div>
-                        <div class="field optional" id="floor-field">
-                            <label for="floor">Våning (för lägenhet)</label>
-                            <input id="floor" name="floor" type="text" placeholder="3/6, hiss">
-                        </div>
-                    </div>
-                    <div class="grid-2">
-                        <label class="checkbox">
-                            <input type="checkbox" id="balcony" name="balcony"> Balkong/uteplats
-                        </label>
-                        <div class="field">
-                            <label for="condition">Skick</label>
-                            <select id="condition" name="condition">
-                                <option value="">- Välj -</option>
-                                <option value="Renoverad">Renoverad</option>
-                                <option value="Bra skick">Bra skick</option>
-                                <option value="Visst renoveringsbehov">Visst renoveringsbehov</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="grid-2">
-                        <div class="field optional">
-                            <label for="association">Föreningens namn</label>
-                            <input id="association" name="association" type="text" placeholder="Brf Exempel">
-                        </div>
-                        <div class="field optional">
-                            <label for="highlights">Fördelar (komma-separerat)</label>
-                            <input id="highlights" name="highlights" type="text" placeholder="Balkong, Låg avgift">
-                        </div>
-                    </div>
-                    <div class="grid-2">
-                        <div class="field">
-                            <label for="tone">Ton</label>
-                            <select id="tone" name="tone">
-                                <option>Neutral</option>
-                                <option>Säljande</option>
-                                <option>Lyxig</option>
-                                <option>Familjär</option>
-                                <option>Saklig</option>
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label for="length">Längd</label>
-                            <select id="length" name="length">
-                                <option value="kort">Kort (140–180 ord)</option>
-                                <option value="normal" selected>Normal (250–300 ord)</option>
-                                <option value="lång">Lång (350–450 ord)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="actions">
-                        <button type="submit" class="primary">Generera annons</button>
-                        <p id="form-message" role="status"></p>
-                    </div>
-                </form>
-
-                <div class="upload-block">
-                    <div class="upload-header">
+                <section class="panel editor" id="editor-panel">
+                    <header class="editor__header">
                         <div>
-                            <p class="eyebrow">Ladda upp filer</p>
-                            <p class="muted">Bilder, planritningar eller PDF:er för AI-analys.</p>
+                            <p class="eyebrow">Annons</p>
+                            <h2 id="detail-address">Ingen annons än</h2>
+                            <p class="muted">Texten genereras här. Markera meningar och välj omskrivning.</p>
                         </div>
-                        <button class="ghost" id="upload-btn">Välj filer</button>
-                    </div>
-                    <div class="dropzone" id="dropzone">
-                        <input type="file" id="file-input" multiple hidden>
-                        <p>Drag & släpp filer här eller klicka för att ladda upp</p>
-                        <div class="upload-icons">
-                            <span>🖼</span><span>📐</span><span>📄</span><span>📝</span>
+                        <div class="editor__actions">
+                            <button class="secondary" id="copy-text-btn" disabled>Kopiera text</button>
+                            <button class="secondary" id="download-txt-btn" disabled>Ladda ner TXT</button>
                         </div>
+                    </header>
+                    <div class="editor__body">
+                        <textarea id="full-editor" class="full-editor" placeholder="Generera annons för att börja" readonly></textarea>
+                        <div id="ai-status" class="ai-status hidden"></div>
                     </div>
-                    <div id="upload-list" class="upload-list"></div>
-                </div>
-            </section>
+                </section>
 
-            <section class="panel editor" id="editor-panel">
-                <header class="editor__header">
+                <section class="panel tools" id="rewrite-panel">
+                    <header>
+                        <p class="eyebrow">Omskrivning</p>
+                        <h2>1 klick på markerad text</h2>
+                    </header>
+                    <div class="tool-buttons">
+                        <button class="chip selection-action" data-mode="rewrite">Skriv om</button>
+                        <button class="chip selection-action" data-mode="sales">Mer säljande</button>
+                        <button class="chip selection-action" data-mode="shorter">Kortare</button>
+                        <button class="chip selection-action" data-mode="simpler">Enklare språk</button>
+                        <button class="chip selection-action" data-mode="luxury">Lyxigare ton</button>
+                        <button class="chip selection-action" data-mode="longer">Längre</button>
+                    </div>
+                    <button class="primary" id="regenerate-btn" disabled>Generera ny variant</button>
+
+                    <div class="versions">
+                        <div class="versions__header">
+                            <p class="eyebrow">Versioner</p>
+                            <button class="ghost" id="clear-versions" disabled>Rensa</button>
+                        </div>
+                        <div id="version-list" class="version-list"></div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <div id="view-objects" class="view view--active">
+            <section class="objects-panel">
+                <div class="objects-panel__header">
                     <div>
-                        <p class="eyebrow">Annons</p>
-                        <h2 id="detail-address">Ingen annons än</h2>
-                        <p class="muted">Texten genereras här. Markera meningar och välj omskrivning.</p>
+                        <p class="eyebrow">Mina objekt</p>
+                        <h2>Översikt över annonser</h2>
                     </div>
-                    <div class="editor__actions">
-                        <button class="secondary" id="copy-text-btn" disabled>Kopiera text</button>
-                        <button class="secondary" id="download-txt-btn" disabled>Ladda ner TXT</button>
+                    <div class="objects-panel__actions">
+                        <input type="search" id="object-search" placeholder="Sök adress, område eller stad" aria-label="Sök objekt">
+                        <button class="ghost" id="refresh-objects" type="button">Uppdatera</button>
                     </div>
-                </header>
-                <div class="editor__body">
-                    <textarea id="full-editor" class="full-editor" placeholder="Generera annons för att börja" readonly></textarea>
-                    <div id="ai-status" class="ai-status hidden"></div>
+                </div>
+                <div id="object-list" class="object-list">
+                    <p class="empty-state">Inga objekt ännu. Skapa din första annons.</p>
                 </div>
             </section>
+        </div>
 
-            <section class="panel tools" id="rewrite-panel">
-                <header>
-                    <p class="eyebrow">Omskrivning</p>
-                    <h2>1 klick på markerad text</h2>
-                </header>
-                <div class="tool-buttons">
-                    <button class="chip selection-action" data-mode="rewrite">Skriv om</button>
-                    <button class="chip selection-action" data-mode="sales">Mer säljande</button>
-                    <button class="chip selection-action" data-mode="shorter">Kortare</button>
-                    <button class="chip selection-action" data-mode="simpler">Enklare språk</button>
-                    <button class="chip selection-action" data-mode="luxury">Lyxigare ton</button>
-                    <button class="chip selection-action" data-mode="longer">Längre</button>
+        <div id="view-stats" class="view">
+            <section class="dashboard" id="dashboard">
+                <div class="stat-card">
+                    <p class="eyebrow">Skapade annonser</p>
+                    <h3 id="stat-total">0</h3>
+                    <p class="muted">Senaste 30 dagarna</p>
                 </div>
-                <button class="primary" id="regenerate-btn" disabled>Generera ny variant</button>
-
-                <div class="versions">
-                    <div class="versions__header">
-                        <p class="eyebrow">Versioner</p>
-                        <button class="ghost" id="clear-versions" disabled>Rensa</button>
-                    </div>
-                    <div id="version-list" class="version-list"></div>
+                <div class="stat-card">
+                    <p class="eyebrow">Omskrivningar</p>
+                    <h3 id="stat-rewrites">0</h3>
+                    <p class="muted">Användningar denna vecka</p>
+                </div>
+                <div class="stat-card">
+                    <p class="eyebrow">Genomsnittlig redigeringstid</p>
+                    <h3 id="stat-time">2:30</h3>
+                    <p class="muted">Per annons</p>
+                </div>
+                <div class="quick-actions">
+                    <button class="secondary" data-view-trigger="generator">Skapa ny annons</button>
+                    <button class="secondary" data-view-trigger="objects">Se objekt</button>
                 </div>
             </section>
-        </main>
+        </div>
+
+        <div id="view-images" class="view">
+            <section class="panel">
+                <p class="eyebrow">Bildhantering</p>
+                <h2>Hantera bilder och filer</h2>
+                <p class="muted">Ladda upp, tagga och förbered bildmaterial för annonser.</p>
+                <p class="muted">Denna sektion kan fyllas med bilduploads och medieöversikt.</p>
+            </section>
+        </div>
+
+        <div id="view-templates" class="view">
+            <section class="panel">
+                <p class="eyebrow">Mallar</p>
+                <h2>Annonsmallar</h2>
+                <p class="muted">Spara och återanvänd ton och struktur för olika målgrupper.</p>
+                <p class="muted">Lägg till mallkort och knappar för att välja mall.</p>
+            </section>
+        </div>
+
+        <div id="view-settings" class="view">
+            <section class="panel">
+                <p class="eyebrow">Inställningar</p>
+                <h2>Kontoinställningar</h2>
+                <p class="muted">Justera språk, ton, standardfält och integrationer.</p>
+                <p class="muted">Lägg till formulär för API-nycklar, team och notifieringar.</p>
+            </section>
+        </div>
     </div>
 
     <script src="/app.js"></script>

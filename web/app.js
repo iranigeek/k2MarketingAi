@@ -258,6 +258,15 @@ function bindEvents() {
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', toggleSidebar);
     }
+    document.querySelectorAll('[data-view]').forEach(link => {
+        link.addEventListener('click', event => {
+            event.preventDefault();
+            showView(link.dataset.view);
+        });
+    });
+    document.querySelectorAll('[data-view-trigger]').forEach(btn => {
+        btn.addEventListener('click', () => showView(btn.dataset.viewTrigger));
+    });
     const refreshObjects = document.getElementById('refresh-objects');
     if (refreshObjects) {
         refreshObjects.addEventListener('click', fetchListings);
@@ -484,6 +493,60 @@ function handleObjectSearch(event) {
     renderObjectList();
 }
 
+function showView(view) {
+    const targetId = `view-${view}`;
+    document.body.className = document.body.className
+        .split(' ')
+        .filter(cls => !cls.startsWith('view-'))
+        .concat(`view-${view}`)
+        .join(' ');
+
+    document.querySelectorAll('.view').forEach(el => {
+        el.classList.toggle('view--active', el.id === targetId);
+    });
+    document.querySelectorAll('[data-view]').forEach(link => {
+        link.classList.toggle('active', link.dataset.view === view);
+    });
+    updateTopbarCopy(view);
+    if (window.innerWidth < 900) {
+        closeSidebar();
+    }
+}
+
+function updateTopbarCopy(view) {
+    const titleEl = document.getElementById('topbar-title');
+    const subtitleEl = document.getElementById('topbar-subtitle');
+    const copy = {
+        generator: {
+            title: 'Annonsgenerator',
+            subtitle: 'Skapa och omskriv annonser.',
+        },
+        objects: {
+            title: 'Mina objekt',
+            subtitle: 'Hantera och öppna befintliga annonser.',
+        },
+        stats: {
+            title: 'Statistik',
+            subtitle: 'Överblick över aktivitet och omskrivningar.',
+        },
+        images: {
+            title: 'Bildhantering',
+            subtitle: 'Hantera och ladda upp bildmaterial.',
+        },
+        templates: {
+            title: 'Mallar',
+            subtitle: 'Återanvänd strukturer och tonlägen.',
+        },
+        settings: {
+            title: 'Inställningar',
+            subtitle: 'Kontroll över konto, team och integrationer.',
+        },
+    }[view] || { title: 'Broker AI', subtitle: '' };
+
+    if (titleEl) titleEl.textContent = copy.title;
+    if (subtitleEl) subtitleEl.textContent = copy.subtitle || '';
+}
+
 function toggleSidebar() {
     document.body.classList.toggle('sidebar-open');
     updateSidebarToggleState();
@@ -509,12 +572,13 @@ function updateSidebarToggleState() {
     if (!toggle) return;
     const open = document.body.classList.contains('sidebar-open');
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    toggle.setAttribute('aria-label', open ? 'Fäll ihop meny' : 'Visa meny');
+    toggle.setAttribute('aria-label', open ? 'Faell ihop meny' : 'Visa meny');
     const icon = toggle.querySelector('span');
     if (icon) {
-        icon.textContent = open ? '✕' : '☰';
+        icon.textContent = open ? 'X' : '≡';
     }
 }
 
 bindEvents();
+showView('objects');
 fetchListings();
