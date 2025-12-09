@@ -31,8 +31,9 @@ async function fetchListings() {
         const res = await fetch('/api/listings/');
         if (!res.ok) throw new Error('Kunde inte hämta listor');
         state.listings = await res.json();
-        document.getElementById('stat-total').textContent = state.listings.length;
+        updateVolumeStats();
         updateTimeSavings();
+        updateImageStats();
         renderObjectList();
         let idToSelect = state.selectedId;
         if (!idToSelect || !state.listings.some(item => item.id === idToSelect)) {
@@ -416,6 +417,15 @@ function renderObjectList() {
             openListingModal(listing.id);
         });
 
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'primary';
+        editBtn.textContent = 'Redigera';
+        editBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await startEditListing(listing.id);
+        });
+
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'ghost';
@@ -425,6 +435,7 @@ function renderObjectList() {
             deleteListing(listing.id);
         });
         actions.appendChild(openBtn);
+        actions.appendChild(editBtn);
         actions.appendChild(deleteBtn);
 
         card.appendChild(title);
@@ -456,6 +467,41 @@ function formatRoomsValue(value) {
         return '';
     }
     return Number.isInteger(value) ? `${value} rum` : `${value.toFixed(1)} rum`;
+}
+
+function populateFormFromListing(listing) {
+    if (!listing) return;
+    const setValue = (id, val) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.type === 'checkbox') {
+            el.checked = Boolean(val);
+        } else {
+            el.value = val ?? '';
+        }
+    };
+
+    setValue('address', listing.address || '');
+    setValue('neighborhood', listing.neighborhood || '');
+    setValue('city', listing.city || '');
+    setValue('property-type', listing.property_type || listing.propertyType || '');
+    setValue('rooms', listing.rooms ?? '');
+    setValue('living-area', listing.living_area ?? listing.livingArea ?? '');
+    setValue('floor', listing.floor ?? '');
+    setValue('condition', listing.condition ?? '');
+    setValue('association', listing.association ?? '');
+    setValue('balcony', listing.balcony);
+    setValue('tone', listing.tone || 'Neutral');
+    setValue('length', listing.length || 'normal');
+
+    if (Array.isArray(listing.highlights)) {
+        setValue('highlights', listing.highlights.join(', '));
+    } else if (listing.highlights) {
+        setValue('highlights', listing.highlights);
+    } else {
+        setValue('highlights', '');
+    }
+    toggleFloorField();
 }
 
 function capitalize(value) {
@@ -542,6 +588,30 @@ function handleObjectSearch(event) {
     renderObjectList();
 }
 
+async function startEditListing(id) {
+    if (!id) return;
+    await selectListing(id);
+    const detail = state.current || state.listings.find(item => item.id === id);
+    if (!detail) return;
+    populateFormFromListing(detail);
+    showView('generator');
+    document.getElementById('listing-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function updateVolumeStats() {
+    const totalEl = document.getElementById('stat-total');
+    const weekEl = document.getElementById('stat-week');
+    const monthEl = document.getElementById('stat-month');
+
+    const total = state.listings.length;
+    const week = countListingsWithinDays(7);
+    const month = countListingsWithinDays(30);
+
+    if (totalEl) totalEl.textContent = total;
+    if (weekEl) weekEl.textContent = week;
+    if (monthEl) monthEl.textContent = month;
+}
+
 function updateTimeSavings() {
     const assumedManualMinutes = 45; // uppskattad manuell tid per annons
     const assumedAIEditableMinutes = 10; // uppskattad tid med AI + justering
@@ -566,6 +636,17 @@ function updateTimeSavings() {
     if (avgEl) avgEl.textContent = formatMinutes(savedPerAd);
     if (monthEl) monthEl.textContent = formatMinutes(savedMonthly);
     if (totalEl) totalEl.textContent = formatMinutes(savedTotal);
+}
+
+function countListingsWithinDays(days) {
+    const now = new Date();
+    const limit = days * 86400000;
+    return (state.listings || []).filter(item => {
+        if (!item.created_at) return true;
+        const created = new Date(item.created_at);
+        if (!Number.isFinite(created.getTime())) return false;
+        return (now - created) <= limit;
+    }).length;
 }
 
 function formatMinutes(minutes) {
@@ -665,7 +746,12 @@ function updateSidebarToggleState() {
 function updateImageStats() {
     const processed = state.uploads.filter(file => file.status === 'Analyserad').length;
     const el = document.getElementById('stat-images');
+    const avgEl = document.getElementById('stat-images-avg');
+    const listingCount = state.listings.length;
+    const average = listingCount ? processed / listingCount : 0;
+
     if (el) el.textContent = processed;
+    if (avgEl) avgEl.textContent = average.toFixed(1);
 }
 
 bindEvents();
