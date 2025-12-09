@@ -249,6 +249,11 @@
                         <h3 id="stat-rewrites">0</h3>
                         <p class="muted">Användningar denna vecka</p>
                     </div>
+                    <div class="stat-card">
+                        <p class="eyebrow">Bearbetade bilder</p>
+                        <h3 id="stat-images">0</h3>
+                        <p class="muted">Analys och uppladdningar</p>
+                    </div>
                 </div>
             </section>
             <section class="stat-section">
@@ -298,6 +303,24 @@
                 <p class="muted">Justera språk, ton, standardfält och integrationer.</p>
                 <p class="muted">Lägg till formulär för API-nycklar, team och notifieringar.</p>
             </section>
+        </div>
+    </div>
+
+    <div id="modal-overlay" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal__content">
+            <div class="modal__header">
+                <div>
+                    <p class="eyebrow">Objekt</p>
+                    <h3 id="modal-title">-</h3>
+                </div>
+                <button class="ghost icon-button" id="modal-close" type="button" aria-label="Stäng">✕</button>
+            </div>
+            <div class="modal__actions">
+                <button class="secondary" id="modal-copy" type="button">Kopiera text</button>
+            </div>
+            <div id="modal-body" class="modal__body">
+                <textarea id="modal-textarea" aria-label="Objekttext" placeholder="Ingen text ännu."></textarea>
+            </div>
         </div>
     </div>
 

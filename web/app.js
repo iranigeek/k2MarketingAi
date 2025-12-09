@@ -259,6 +259,30 @@ function bindEvents() {
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', toggleSidebar);
     }
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalClose = document.getElementById('modal-close');
+    const modalCopy = document.getElementById('modal-copy');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+    }
+    if (modalClose) {
+        modalClose.addEventListener('click', closeModal);
+    }
+    if (modalCopy) {
+        modalCopy.addEventListener('click', () => {
+            const textarea = document.getElementById('modal-textarea');
+            if (!textarea || !textarea.value) return;
+            navigator.clipboard.writeText(textarea.value);
+            modalCopy.classList.add('copied');
+            modalCopy.textContent = 'Kopierat!';
+            setTimeout(() => {
+                modalCopy.classList.remove('copied');
+                modalCopy.textContent = 'Kopiera text';
+            }, 1500);
+        });
+    }
     document.querySelectorAll('[data-view]').forEach(link => {
         link.addEventListener('click', event => {
             event.preventDefault();
@@ -363,8 +387,7 @@ function renderObjectList() {
     }
 
     entries.forEach(listing => {
-        const card = document.createElement('button');
-        card.type = 'button';
+        const card = document.createElement('div');
         card.className = 'object-card';
         if (listing.id === state.selectedId) {
             card.classList.add('active');
@@ -382,9 +405,32 @@ function renderObjectList() {
         status.className = 'object-card__status';
         status.textContent = buildListingStatus(listing);
 
+        const actions = document.createElement('div');
+        actions.className = 'object-card__actions';
+        const openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'secondary';
+        openBtn.textContent = 'Öppna';
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openListingModal(listing.id);
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'ghost';
+        deleteBtn.textContent = 'Ta bort';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteListing(listing.id);
+        });
+        actions.appendChild(openBtn);
+        actions.appendChild(deleteBtn);
+
         card.appendChild(title);
         card.appendChild(meta);
         card.appendChild(status);
+        card.appendChild(actions);
         card.addEventListener('click', () => selectListing(listing.id));
         container.appendChild(card);
     });
@@ -459,6 +505,7 @@ function renderUploads() {
         item.appendChild(status);
         list.appendChild(item);
     });
+    updateImageStats();
 }
 
 function simulateImageAnalysis() {
@@ -467,6 +514,7 @@ function simulateImageAnalysis() {
     setTimeout(() => {
         state.uploads = state.uploads.map(file => ({ ...file, status: 'Analyserad' }));
         renderUploads();
+        updateImageStats();
         setAIStatus('Bildanalys klar. Förbättrade ton och detaljer i texten.', false, true);
     }, 1200);
 }
@@ -614,6 +662,61 @@ function updateSidebarToggleState() {
     }
 }
 
+function updateImageStats() {
+    const processed = state.uploads.filter(file => file.status === 'Analyserad').length;
+    const el = document.getElementById('stat-images');
+    if (el) el.textContent = processed;
+}
+
 bindEvents();
 showView('objects');
 fetchListings();
+
+async function deleteListing(id) {
+    if (!id) return;
+    const ok = window.confirm('Ta bort detta objekt?');
+    if (!ok) return;
+    try {
+        const res = await fetch(`/api/listings/${id}/`, { method: 'DELETE' });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Misslyckades med att ta bort objekt');
+        }
+        if (state.selectedId === id) {
+            state.selectedId = null;
+            state.current = null;
+            renderDetail();
+        }
+        await fetchListings();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function openListingModal(id) {
+    if (!id) return;
+    let detail = null;
+    if (state.current && state.current.id === id) {
+        detail = state.current;
+    } else {
+        try {
+            const res = await fetch(`/api/listings/${id}/`);
+            if (!res.ok) throw new Error('Kunde inte hämta objekt');
+            detail = await res.json();
+        } catch (err) {
+            alert(err.message);
+            return;
+        }
+    }
+    const overlay = document.getElementById('modal-overlay');
+    const title = document.getElementById('modal-title');
+    const textarea = document.getElementById('modal-textarea');
+    title.textContent = detail.address || 'Objekt';
+    if (textarea) textarea.value = getFullCopy(detail) || 'Ingen text ännu.';
+    overlay.classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay')?.classList.add('hidden');
+}
+
