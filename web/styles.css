@@ -245,6 +245,18 @@ body.sidebar-open .sidebar {
     align-items: center;
     margin-top: 6px;
 }
+.object-card__actions .edit-btn {
+    background: #e7ebf3;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 12px;
+    box-shadow: 0 6px 18px rgba(31, 41, 51, 0.08);
+}
+.object-card__actions .edit-btn:hover {
+    border-color: #cfd6e2;
+    background: #dde2ec;
+}
 .object-card__actions .ghost {
     padding: 6px 10px;
 }

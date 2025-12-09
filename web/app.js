@@ -419,7 +419,7 @@ function renderObjectList() {
 
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
-        editBtn.className = 'primary';
+        editBtn.className = 'edit-btn';
         editBtn.textContent = 'Redigera';
         editBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
