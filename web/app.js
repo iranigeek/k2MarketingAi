@@ -32,6 +32,7 @@ async function fetchListings() {
         if (!res.ok) throw new Error('Kunde inte hämta listor');
         state.listings = await res.json();
         document.getElementById('stat-total').textContent = state.listings.length;
+        updateTimeSavings();
         renderObjectList();
         let idToSelect = state.selectedId;
         if (!idToSelect || !state.listings.some(item => item.id === idToSelect)) {
@@ -491,6 +492,40 @@ function setAIStatus(message, busy, hideLater) {
 function handleObjectSearch(event) {
     state.listingFilter = event.target.value.toLowerCase();
     renderObjectList();
+}
+
+function updateTimeSavings() {
+    const assumedManualMinutes = 45; // uppskattad manuell tid per annons
+    const assumedAIEditableMinutes = 10; // uppskattad tid med AI + justering
+    const savedPerAd = Math.max(assumedManualMinutes - assumedAIEditableMinutes, 0);
+
+    const now = new Date();
+    const msInDay = 86400000;
+    const listings = state.listings || [];
+    const recent = listings.filter(item => {
+        if (!item.created_at) return true;
+        const created = new Date(item.created_at);
+        return Number.isFinite(created.getTime()) && (now - created) <= 30 * msInDay;
+    });
+
+    const savedMonthly = savedPerAd * recent.length;
+    const savedTotal = savedPerAd * listings.length;
+
+    const avgEl = document.getElementById('stat-saved-avg');
+    const monthEl = document.getElementById('stat-saved-month');
+    const totalEl = document.getElementById('stat-saved-total');
+
+    if (avgEl) avgEl.textContent = formatMinutes(savedPerAd);
+    if (monthEl) monthEl.textContent = formatMinutes(savedMonthly);
+    if (totalEl) totalEl.textContent = formatMinutes(savedTotal);
+}
+
+function formatMinutes(minutes) {
+    const mins = Math.max(0, Math.round(minutes));
+    if (mins < 90) return `${mins} min`;
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `${hours} h ${rem} min` : `${hours} h`;
 }
 
 function showView(view) {

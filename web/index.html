@@ -236,25 +236,39 @@
         </div>
 
         <div id="view-stats" class="view">
-            <section class="dashboard" id="dashboard">
-                <div class="stat-card">
-                    <p class="eyebrow">Skapade annonser</p>
-                    <h3 id="stat-total">0</h3>
-                    <p class="muted">Senaste 30 dagarna</p>
+            <section class="stat-section">
+                <p class="eyebrow">Volym</p>
+                <div class="dashboard">
+                    <div class="stat-card">
+                        <p class="eyebrow">Skapade annonser</p>
+                        <h3 id="stat-total">0</h3>
+                        <p class="muted">Senaste 30 dagarna</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="eyebrow">Omskrivningar</p>
+                        <h3 id="stat-rewrites">0</h3>
+                        <p class="muted">Användningar denna vecka</p>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <p class="eyebrow">Omskrivningar</p>
-                    <h3 id="stat-rewrites">0</h3>
-                    <p class="muted">Användningar denna vecka</p>
-                </div>
-                <div class="stat-card">
-                    <p class="eyebrow">Genomsnittlig redigeringstid</p>
-                    <h3 id="stat-time">2:30</h3>
-                    <p class="muted">Per annons</p>
-                </div>
-                <div class="quick-actions">
-                    <button class="secondary" data-view-trigger="generator">Skapa ny annons</button>
-                    <button class="secondary" data-view-trigger="objects">Se objekt</button>
+            </section>
+            <section class="stat-section">
+                <p class="eyebrow">Tidssparande</p>
+                <div class="dashboard">
+                    <div class="stat-card">
+                        <p class="eyebrow">Tid sparad / annons</p>
+                        <h3 id="stat-saved-avg">0 min</h3>
+                        <p class="muted">Jämfört med manuellt skrivande</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="eyebrow">Tid sparad / månad</p>
+                        <h3 id="stat-saved-month">0 h</h3>
+                        <p class="muted">Senaste 30 dagarna</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="eyebrow">Total tid sparad</p>
+                        <h3 id="stat-saved-total">0 h</h3>
+                        <p class="muted">Alla genererade annonser</p>
+                    </div>
                 </div>
             </section>
         </div>

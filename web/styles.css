@@ -127,6 +127,8 @@ body.sidebar-open .sidebar {
     border-radius: 10px;
     font-size: 20px;
     padding: 0;
+    position: relative;
+    top: -8px;
 }
 .icon-button span { display: block; line-height: 1; }
 
@@ -247,6 +249,8 @@ body.sidebar-open .sidebar {
 }
 .stat-card h3 { margin: 6px 0; font-size: 28px; }
 .quick-actions { display: flex; gap: 10px; align-items: center; }
+.stat-section { margin-bottom: 18px; }
+.stat-section > .eyebrow { margin-bottom: 6px; display: inline-block; }
 
 .workspace {
     display: grid;
