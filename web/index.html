@@ -54,9 +54,26 @@
         <div id="view-generator" class="view">
             <main class="workspace">
                 <section class="panel input-panel">
+                    <div class="upload-block">
+                        <div class="upload-header">
+                            <div>
+                                <p class="eyebrow">Ladda upp filer</p>
+                                <p class="muted">Bilder, planritningar eller PDF:er för AI-analys.</p>
+                            </div>
+                            <button class="ghost" id="upload-btn">Välj filer</button>
+                        </div>
+                        <div class="dropzone" id="dropzone">
+                            <input type="file" id="file-input" multiple hidden>
+                            <p>Drag & släpp filer här eller klicka för att ladda upp</p>
+                            <div class="upload-icons">
+                                <span>🖼</span><span>📄</span><span>📎</span><span>📷</span>
+                            </div>
+                        </div>
+                        <div id="upload-list" class="upload-list"></div>
+                    </div>
+
                     <header>
                         <p class="eyebrow">Fakta om bostaden</p>
-                        <h2>Minimalt med fält</h2>
                     </header>
                     <form id="listing-form" class="minimal-form">
                         <div class="field">
@@ -97,7 +114,7 @@
                             </div>
                             <div class="field optional" id="floor-field">
                                 <label for="floor">Våning (för lägenhet)</label>
-                                <input id="floor" name="floor" type="text" placeholder="3/6, hiss">
+                                <input id="floor" name="floor" type="text" placeholder="1">
                             </div>
                         </div>
                         <div class="grid-2">
@@ -149,24 +166,6 @@
                             <p id="form-message" role="status"></p>
                         </div>
                     </form>
-
-                    <div class="upload-block">
-                        <div class="upload-header">
-                            <div>
-                                <p class="eyebrow">Ladda upp filer</p>
-                                <p class="muted">Bilder, planritningar eller PDF:er för AI-analys.</p>
-                            </div>
-                            <button class="ghost" id="upload-btn">Välj filer</button>
-                        </div>
-                        <div class="dropzone" id="dropzone">
-                            <input type="file" id="file-input" multiple hidden>
-                            <p>Drag & släpp filer här eller klicka för att ladda upp</p>
-                            <div class="upload-icons">
-                                <span>🖼</span><span>📄</span><span>📎</span><span>📷</span>
-                            </div>
-                        </div>
-                        <div id="upload-list" class="upload-list"></div>
-                    </div>
                 </section>
 
                 <section class="panel editor" id="editor-panel">
