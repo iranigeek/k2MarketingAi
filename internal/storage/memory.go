@@ -94,6 +94,21 @@ func (s *InMemoryStore) UpdateListingSections(_ context.Context, id string, sect
 	return Listing{}, ErrNotFound
 }
 
+// UpdateInsights stores refreshed insights and status for a listing.
+func (s *InMemoryStore) UpdateInsights(_ context.Context, id string, insights Insights, status Status) (Listing, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for idx, l := range s.listings {
+		if l.ID == id {
+			s.listings[idx].Insights = insights
+			s.listings[idx].Status = status
+			return s.listings[idx], nil
+		}
+	}
+	return Listing{}, ErrNotFound
+}
+
 // DeleteListing removes a listing by ID.
 func (s *InMemoryStore) DeleteListing(_ context.Context, id string) error {
 	s.mu.Lock()

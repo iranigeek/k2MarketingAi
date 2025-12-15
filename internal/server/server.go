@@ -9,10 +9,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"k2MarketingAi/internal/listings"
+	"k2MarketingAi/internal/vision"
 )
 
 // New constructs the HTTP server with routes and middleware.
-func New(port string, listingHandler listings.Handler, staticFS http.Handler) *http.Server {
+func New(port string, listingHandler listings.Handler, visionHandler vision.Handler, staticFS http.Handler) *http.Server {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
@@ -38,6 +39,10 @@ func New(port string, listingHandler listings.Handler, staticFS http.Handler) *h
 			})
 		})
 		r.Get("/events", listingHandler.StreamEvents)
+		r.Route("/vision", func(r chi.Router) {
+			r.Post("/analyze", visionHandler.Analyze)
+			r.Post("/design", visionHandler.Design)
+		})
 	})
 
 	// Serve the static frontend

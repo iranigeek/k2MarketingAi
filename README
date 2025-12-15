@@ -9,7 +9,7 @@ En Go-baserad grund för att snabbt komma igång med en AI-driven plattform som 
 ## Snabbstart
 
 1. **Installera Go 1.21+** och klona repot.
-2. **Skapa din `config.json`** genom att kopiera `config.example.json` och fylla i värden (OpenAI-nyckel, ev. S3/DB):
+2. **Skapa din `config.json`** genom att kopiera `config.example.json` och fylla i värden (Gemini-nyckel, ev. S3/DB):
 
    ```bash
    cp config.example.json config.json
@@ -113,6 +113,15 @@ Behöver du bara temporär lagring (t.ex. för bildanalys) kan du hoppa över S3
 
 Om `S3_BUCKET` eller `S3_REGION` utelämnas faller uppladdningar tillbaka till ett inaktiverat läge och backend returnerar ett tydligt fel när en bild skickas med.
 
+> När en bild finns på ett objekt och en Gemini-nyckel är konfigurerad kör backend automatiskt Google AI bildanalys. Resultatet (sammanfattning, rumstyp, stil, färger m.m.) sparas i `insights.vision` och pipeline-steget “Vision” markeras när analysen är klar.
+
+### Bildstudio (friliggande verktyg)
+
+- `POST /api/vision/analyze` – analysera valfri bild-URL **eller** ladda upp en bildfil och få samma strukturerade resultat som i listings.
+- `POST /api/vision/design` – lämna textinstruktioner (t.ex. ”Brun lädersoffa, låg tv-bänk i ek...”) och få ett komplett designförslag (layout, möbler, färger, belysning).
+
+I webbgränssnittet finns fliken **Bildstudio** där båda funktionerna finns med formulär och resultatpaneler.
+
 ## Modulär text & geodata
 
 Backend skapar nu strukturerade sektioner (Inledning, Hall, Kök, Vardagsrum, Område) för varje objekt. Frontend visar dessa sektioner i respektive kort och du kan omskriva dem direkt via “Skriv om”-knappen som anropar `POST /api/listings/{id}/sections/{slug}/rewrite`.
@@ -129,19 +138,23 @@ Sektionerna är flexibla: ange en valfri array i `sections` när du skapar en li
 
 Historik per sektion (`section_history`) sparas automatiskt (max 5 versioner) varje gång AI eller manuell redigering körs, och mäklaren kan återställa en tidigare version med ett klick.
 
-> Promptmotorn för OpenAI är uppstyrd med tydliga sektioninstruktioner och exempelstil, så att texterna följer professionell mäklar-copy snarare än generiska utsagor.
+> Promptmotorn för Gemini är uppstyrd med tydliga sektioninstruktioner och exempelstil, så att texterna följer professionell mäklar-copy snarare än generiska utsagor.
 
-Generering sker via OpenAI (Chat Completions) när `config.json` innehåller:
+Generering sker via Google Gemini (Generative Language API) när `config.json` innehåller:
 
 ```json
 "ai": {
-  "provider": "openai",
-  "openai": {
-    "api_key": "DIN-OPENAI-NYCKEL",
-    "model": "gpt-4o-mini"
+  "provider": "gemini",
+  "gemini": {
+    "api_key": "DIN-GEMINI-NYCKEL",
+    "model": "gemini-1.5-pro-latest",
+    "vision_model": "gemini-1.5-flash-latest",
+    "timeout_seconds": 60
   }
 }
 ```
+
+`vision_model` styr vilken Gemini-modell som används för automatisk bildanalys (flash är snabb och räcker gott). `timeout_seconds` går att tweaka om du behöver längre (eller kortare) väntetid för anropen; standarden är 60 sekunder.
 
 Geodata hämtas via Google Geocoding + Places. Lägg nyckeln i `config.json`:
 
@@ -155,7 +168,7 @@ Utvecklingsläge: om nyckeln saknas faller providern tillbaka till statiska exem
 
 ## Nästa steg
 
-- Lägg till automatisk bildanalys (OpenAI Vision eller Google Cloud Vision) ovanpå den nya S3-uppladdningen.
+- Lägg till automatisk bildanalys (Gemini eller Google Cloud Vision) ovanpå den nya S3-uppladdningen.
 - Lägg till geodata (Google Places, Trafiklab) och injicera i textgenereringen.
 - Bygg modulär texteditor med sektioner (Inledning, Hall, Kök, Område) och omskrivningar per sektion.
 - Lägg till autentisering och rollhantering för mäklarbyråer.

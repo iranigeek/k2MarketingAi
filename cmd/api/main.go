@@ -19,6 +19,7 @@ import (
 	"k2MarketingAi/internal/media"
 	"k2MarketingAi/internal/server"
 	"k2MarketingAi/internal/storage"
+	"k2MarketingAi/internal/vision"
 )
 
 func main() {
@@ -61,12 +62,20 @@ func main() {
 		CacheTTL:           time.Duration(cfg.Geodata.CacheTTLMinutes) * time.Minute,
 	})
 
-	var generator generation.Generator
-	if strings.EqualFold(cfg.AI.Provider, "openai") && cfg.AI.OpenAI.APIKey != "" {
-		openAIClient := llm.NewOpenAIClient(cfg.AI.OpenAI.APIKey, cfg.AI.OpenAI.Model)
-		generator = generation.NewOpenAI(openAIClient)
-		log.Println("generator ready: OpenAI")
-	} else {
+	var (
+		generator      generation.Generator
+		visionAnalyzer vision.Analyzer
+		visionDesigner vision.Designer
+	)
+	switch {
+	case strings.EqualFold(cfg.AI.Provider, "gemini") && cfg.AI.Gemini.APIKey != "":
+		timeout := time.Duration(cfg.AI.Gemini.TimeoutSeconds) * time.Second
+		geminiClient := llm.NewGeminiClient(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.Model, timeout)
+		generator = generation.NewLLM(geminiClient)
+		visionAnalyzer = vision.NewGeminiAnalyzer(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.VisionModel, timeout)
+		visionDesigner = vision.NewGeminiDesigner(geminiClient)
+		log.Println("generator ready: Gemini")
+	default:
 		generator = generation.NewHeuristic()
 		log.Println("generator ready: heuristic fallback")
 	}
@@ -78,11 +87,16 @@ func main() {
 		Uploader:    uploader,
 		GeoProvider: geoProvider,
 		Generator:   generator,
+		Vision:      visionAnalyzer,
 		Events:      eventBroker,
 	}
 
 	staticFS := http.FileServer(http.Dir("web"))
-	srv := server.New(cfg.Port, listingHandler, staticFS)
+	visionHandler := vision.Handler{
+		Analyzer: visionAnalyzer,
+		Designer: visionDesigner,
+	}
+	srv := server.New(cfg.Port, listingHandler, visionHandler, staticFS)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

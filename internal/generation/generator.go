@@ -281,17 +281,13 @@ func splitSentences(text string) []string {
 	return sentences
 }
 
-// NewOpenAI wires the generator to OpenAI's chat completions.
-func NewOpenAI(client *llm.OpenAIClient) Generator {
-	return &openAIGenerator{
-		client:   client,
-		fallback: heuristicGenerator{},
-	}
+// NewLLM wires the generator to any chat-completion capable client.
+func NewLLM(client llm.Client) Generator {
+	return &llmGenerator{client: client}
 }
 
-type openAIGenerator struct {
-	client   *llm.OpenAIClient
-	fallback Generator
+type llmGenerator struct {
+	client llm.Client
 }
 
 var sectionGuidelines = map[string]string{
@@ -302,7 +298,7 @@ var sectionGuidelines = map[string]string{
 	"area":    "Summera service, rekreation och kommunikation från geodata.",
 }
 
-func (g *openAIGenerator) Generate(ctx context.Context, listing storage.Listing) (Result, error) {
+func (g *llmGenerator) Generate(ctx context.Context, listing storage.Listing) (Result, error) {
 	if hasPremiumDetails(listing.Details) {
 		text, err := g.generatePremiumAd(ctx, listing)
 		if err == nil {
@@ -366,12 +362,12 @@ Data:
 		{Role: "user", Content: userPrompt},
 	}, 0.4)
 	if err != nil {
-		return g.fallback.Generate(ctx, listing)
+		return Result{}, err
 	}
 
 	sections, parseErr := parseSections(content)
 	if parseErr != nil {
-		return g.fallback.Generate(ctx, listing)
+		return Result{}, parseErr
 	}
 	return Result{
 		Sections: sections,
@@ -379,7 +375,7 @@ Data:
 	}, nil
 }
 
-func (g *openAIGenerator) Rewrite(ctx context.Context, listing storage.Listing, section storage.Section, instruction string) (storage.Section, error) {
+func (g *llmGenerator) Rewrite(ctx context.Context, listing storage.Listing, section storage.Section, instruction string) (storage.Section, error) {
 	guideline := sectionGuidelines[strings.ToLower(section.Slug)]
 	if guideline == "" {
 		guideline = "Håll samma struktur men förbättra språk och tydlighet."
@@ -402,12 +398,12 @@ Geodata: %s
 		{Role: "user", Content: userPrompt},
 	}, 0.5)
 	if err != nil {
-		return g.fallback.Rewrite(ctx, listing, section, instruction)
+		return storage.Section{}, err
 	}
 
 	updated, parseErr := parseSection(content, section)
 	if parseErr != nil {
-		return g.fallback.Rewrite(ctx, listing, section, instruction)
+		return storage.Section{}, parseErr
 	}
 	return updated, nil
 }
@@ -484,7 +480,7 @@ func hasPremiumDetails(details storage.Details) bool {
 	return false
 }
 
-func (g *openAIGenerator) generatePremiumAd(ctx context.Context, listing storage.Listing) (string, error) {
+func (g *llmGenerator) generatePremiumAd(ctx context.Context, listing storage.Listing) (string, error) {
 	payload, _ := json.Marshal(struct {
 		Meta        storage.MetaInfo        `json:"meta"`
 		Property    storage.PropertyInfo    `json:"property"`

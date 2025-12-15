@@ -35,13 +35,15 @@ type GeodataConfig struct {
 // AIConfig selects which LLM provider to use.
 type AIConfig struct {
 	Provider string       `json:"provider"`
-	OpenAI   OpenAIConfig `json:"openai"`
+	Gemini   GeminiConfig `json:"gemini"`
 }
 
-// OpenAIConfig holds API credentials and defaults.
-type OpenAIConfig struct {
-	APIKey string `json:"api_key"`
-	Model  string `json:"model"`
+// GeminiConfig holds Google Generative Language credentials.
+type GeminiConfig struct {
+	APIKey         string `json:"api_key"`
+	Model          string `json:"model"`
+	VisionModel    string `json:"vision_model"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
 }
 
 // Load reads configuration from the provided JSON file.
@@ -67,7 +69,13 @@ func applyDefaults(cfg *Config) {
 	if cfg.Geodata.CacheTTLMinutes == 0 {
 		cfg.Geodata.CacheTTLMinutes = 30
 	}
-	if cfg.AI.OpenAI.Model == "" {
-		cfg.AI.OpenAI.Model = "gpt-4o-mini"
+	if cfg.AI.Gemini.Model == "" {
+		cfg.AI.Gemini.Model = "gemini-1.5-pro-latest"
+	}
+	if cfg.AI.Gemini.VisionModel == "" {
+		cfg.AI.Gemini.VisionModel = "gemini-1.5-flash-latest"
+	}
+	if cfg.AI.Gemini.TimeoutSeconds <= 0 {
+		cfg.AI.Gemini.TimeoutSeconds = 60
 	}
 }

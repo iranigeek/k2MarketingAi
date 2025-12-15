@@ -124,6 +124,29 @@ func (s *PostgresStore) UpdateListingSections(ctx context.Context, id string, se
 	return item, nil
 }
 
+// UpdateInsights replaces insights JSON and optionally pipeline status.
+func (s *PostgresStore) UpdateInsights(ctx context.Context, id string, insights Insights, status Status) (Listing, error) {
+	insightsJSON, err := json.Marshal(insights)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal insights: %w", err)
+	}
+
+	statusJSON, err := json.Marshal(status)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal status: %w", err)
+	}
+
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET insights=$2, pipeline_status=$3 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at`, id, insightsJSON, statusJSON)
+	item, scanErr := scanListing(row)
+	if scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return Listing{}, ErrNotFound
+		}
+		return Listing{}, scanErr
+	}
+	return item, nil
+}
+
 // DeleteListing removes a listing entirely.
 func (s *PostgresStore) DeleteListing(ctx context.Context, id string) error {
 	result, err := s.pool.Exec(ctx, `DELETE FROM listings WHERE id=$1`, id)

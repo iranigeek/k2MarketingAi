@@ -22,6 +22,10 @@
                 <span class="icon">📊</span>
                 <span class="sidebar__label">Statistik</span>
             </a>
+            <a class="sidebar__item" href="#" data-view="vision">
+                <span class="icon">🖼</span>
+                <span class="sidebar__label">Bildstudio</span>
+            </a>
             <a class="sidebar__item" href="#" data-view="templates">
                 <span class="icon">🧩</span>
                 <span class="sidebar__label">Mallar</span>
@@ -183,6 +187,17 @@
                     <div class="editor__body">
                         <textarea id="full-editor" class="full-editor" placeholder="Generera annons för att börja" readonly></textarea>
                         <div id="ai-status" class="ai-status hidden"></div>
+                        <div id="vision-insights" class="vision-insights hidden" aria-live="polite">
+                            <div class="vision-insights__header">
+                                <div>
+                                    <p class="eyebrow">Bildanalys</p>
+                                    <h3 id="vision-room">-</h3>
+                                </div>
+                                <span id="vision-style" class="vision-insights__style hidden"></span>
+                            </div>
+                            <p id="vision-summary" class="vision-insights__summary"></p>
+                            <div id="vision-tags" class="vision-badges"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -210,6 +225,45 @@
                     </div>
                 </section>
             </main>
+        </div>
+        <div id="view-vision" class="view">
+            <section class="panel vision-panel">
+                <div class="vision-panel__header">
+                    <div>
+                        <p class="eyebrow">Bildstudio</p>
+                        <h2>Analysera och designa rum</h2>
+                        <p class="muted">Använd Google Gemini för att tolka bilder och få designförslag på sekunder.</p>
+                    </div>
+                </div>
+                <div class="vision-grid">
+                    <article class="vision-card">
+                        <h3>Analysera bild</h3>
+                        <p class="muted">Klistra in en bild-URL (från t.ex. ditt mediebibliotek) för att tolka stil, rumstyp och detaljer.</p>
+                        <form id="vision-analyze-form" class="vision-form">
+                            <input id="vision-image-url" type="url" placeholder="https://exempel.se/bild.jpg">
+                            <label class="muted small">eller ladda upp fil</label>
+                            <input id="vision-image-file" type="file" accept="image/*">
+                            <button type="submit" class="primary">Analysera bild</button>
+                            <p id="vision-analyze-status" class="vision-status muted"></p>
+                        </form>
+                        <div id="vision-analyze-result" class="vision-result">
+                            <p class="muted">Ingen analys ännu.</p>
+                        </div>
+                    </article>
+                    <article class="vision-card">
+                        <h3>Designa rum</h3>
+                        <p class="muted">Beskriv hur du vill möblera eller styla ett rum – AI:n föreslår layout, möbler och färger.</p>
+                        <form id="vision-design-form" class="vision-form">
+                            <textarea id="vision-design-prompt" rows="4" placeholder="Ex: Skapa ett vardagsrum med brun lädersoffa, tv-bänk i ek och moderna lampor."></textarea>
+                            <button type="submit" class="secondary">Skapa designförslag</button>
+                            <p id="vision-design-status" class="vision-status muted"></p>
+                        </form>
+                        <div id="vision-design-output" class="vision-result">
+                            <p class="muted">Inget designförslag ännu.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
         </div>
 
         <div id="view-objects" class="view view--active">

@@ -50,6 +50,7 @@ type Section struct {
 // Insights aggregates AI/automation derived metadata for a listing.
 type Insights struct {
 	Geodata GeodataInsights `json:"geodata,omitempty"`
+	Vision  VisionInsights  `json:"vision,omitempty"`
 }
 
 // Status represents pipeline progress for the listing.
@@ -58,6 +59,16 @@ type Status struct {
 	Vision  string `json:"vision"`
 	Geodata string `json:"geodata"`
 	Text    string `json:"text"`
+}
+
+// VisionInsights stores AI-derived understanding of listing images.
+type VisionInsights struct {
+	Summary        string   `json:"summary"`
+	RoomType       string   `json:"room_type"`
+	Style          string   `json:"style"`
+	NotableDetails []string `json:"notable_details"`
+	ColorPalette   []string `json:"color_palette"`
+	Tags           []string `json:"tags"`
 }
 
 // Details aggregates the richer structured data from the new form.
@@ -174,6 +185,7 @@ type Store interface {
 	ListListings(ctx context.Context) ([]Listing, error)
 	GetListing(ctx context.Context, id string) (Listing, error)
 	UpdateListingSections(ctx context.Context, id string, sections []Section, fullCopy string, history History, status Status) (Listing, error)
+	UpdateInsights(ctx context.Context, id string, insights Insights, status Status) (Listing, error)
 	UpdateStatus(ctx context.Context, id string, status Status) error
 	DeleteListing(ctx context.Context, id string) error
 	Close()

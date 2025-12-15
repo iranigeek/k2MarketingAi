@@ -20,6 +20,7 @@ import (
 	"k2MarketingAi/internal/geodata"
 	"k2MarketingAi/internal/media"
 	"k2MarketingAi/internal/storage"
+	"k2MarketingAi/internal/vision"
 )
 
 const (
@@ -32,6 +33,7 @@ type Handler struct {
 	Uploader    media.Uploader
 	GeoProvider geodata.Provider
 	Generator   generation.Generator
+	Vision      vision.Analyzer
 	Events      *events.Broker
 }
 
@@ -162,13 +164,15 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Generator != nil {
-		if result, genErr := h.Generator.Generate(r.Context(), listing); genErr == nil {
-			listing.Sections = result.Sections
-			if strings.TrimSpace(result.FullCopy) != "" {
-				listing.FullCopy = result.FullCopy
-			}
-		} else {
-			log.Printf("generator failed, using fallback sections: %v", genErr)
+		result, genErr := h.Generator.Generate(r.Context(), listing)
+		if genErr != nil {
+			log.Printf("generator failed: %v", genErr)
+			http.Error(w, fmt.Sprintf("text generation failed: %v", genErr), http.StatusBadGateway)
+			return
+		}
+		listing.Sections = result.Sections
+		if strings.TrimSpace(result.FullCopy) != "" {
+			listing.FullCopy = result.FullCopy
 		}
 	}
 	recordHistoryForAll(&listing, "generate")
@@ -265,13 +269,13 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 	section := listing.Sections[idx]
 	fallbackUsed := false
 	if h.Generator != nil {
-		if updated, genErr := h.Generator.Rewrite(r.Context(), listing, section, req.Instruction); genErr == nil {
-			section = updated
-		} else {
-			log.Printf("rewrite fallback: %v", genErr)
-			fallbackUsed = true
-			section.Content = generation.ApplyLocalRewrite(section.Content, req.Instruction)
+		updated, genErr := h.Generator.Rewrite(r.Context(), listing, section, req.Instruction)
+		if genErr != nil {
+			log.Printf("rewrite failed: %v", genErr)
+			http.Error(w, fmt.Sprintf("text rewrite failed: %v", genErr), http.StatusBadGateway)
+			return
 		}
+		section = updated
 	} else if strings.TrimSpace(req.Instruction) != "" {
 		fallbackUsed = true
 		section.Content = generation.ApplyLocalRewrite(section.Content, req.Instruction)
@@ -808,6 +812,8 @@ func deriveStatus(listing *storage.Listing) {
 
 	if listing.ImageURL == "" {
 		status.Vision = "skipped"
+	} else if listing.Insights.Vision.Summary != "" && status.Vision == "" {
+		status.Vision = "completed"
 	} else if status.Vision == "" {
 		status.Vision = "pending"
 	}
@@ -835,13 +841,45 @@ func (h Handler) runPipeline(initial storage.Listing) {
 
 	ctx := context.Background()
 	status := initial.Status
+	listing := initial
 
-	if initial.ImageURL != "" && status.Vision != "completed" {
-		status.Vision = "in_progress"
-		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-		h.publishStatus(initial.ID, status)
-		time.Sleep(1500 * time.Millisecond)
-		status.Vision = "completed"
+	if initial.ImageURL == "" {
+		if status.Vision == "" {
+			status.Vision = "skipped"
+			_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+			h.publishStatus(initial.ID, status)
+		}
+	} else if status.Vision != "completed" {
+		if h.Vision == nil {
+			status.Vision = "skipped"
+			_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+			h.publishStatus(initial.ID, status)
+		} else {
+			status.Vision = "in_progress"
+			_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+			h.publishStatus(initial.ID, status)
+
+			insights, err := h.Vision.Analyze(ctx, initial.ImageURL)
+			if err != nil {
+				log.Printf("vision analysis failed: %v", err)
+				status.Vision = "failed"
+				_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+				h.publishStatus(initial.ID, status)
+			} else {
+				listing.Insights.Vision = insights
+				status.Vision = "completed"
+				updated, err := h.Store.UpdateInsights(ctx, initial.ID, listing.Insights, status)
+				if err != nil {
+					log.Printf("store vision insights failed: %v", err)
+					_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+					h.publishStatus(initial.ID, status)
+				} else {
+					listing = updated
+					status = updated.Status
+					h.publishListing(updated)
+				}
+			}
+		}
 	}
 
 	if status.Geodata != "completed" {
@@ -850,6 +888,8 @@ func (h Handler) runPipeline(initial storage.Listing) {
 		h.publishStatus(initial.ID, status)
 		time.Sleep(1200 * time.Millisecond)
 		status.Geodata = "completed"
+		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+		h.publishStatus(initial.ID, status)
 	}
 
 	if status.Text != "completed" {
@@ -858,6 +898,8 @@ func (h Handler) runPipeline(initial storage.Listing) {
 		h.publishStatus(initial.ID, status)
 		time.Sleep(800 * time.Millisecond)
 		status.Text = "completed"
+		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
+		h.publishStatus(initial.ID, status)
 	}
 
 	status.Data = "completed"
