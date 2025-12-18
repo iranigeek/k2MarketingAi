@@ -494,7 +494,13 @@ function bindEvents() {
         });
     });
     document.querySelectorAll('[data-view-trigger]').forEach(btn => {
-        btn.addEventListener('click', () => showView(btn.dataset.viewTrigger));
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.viewTrigger;
+            showView(view);
+            if (view === 'generator') {
+                resetGeneratorForm();
+            }
+        });
     });
     const refreshObjects = document.getElementById('refresh-objects');
     if (refreshObjects) {
@@ -704,6 +710,30 @@ function populateFormFromListing(listing) {
     } else {
         setValue('highlights', '');
     }
+    toggleFloorField();
+}
+
+function resetGeneratorForm() {
+    const form = document.getElementById('listing-form');
+    if (form) {
+        form.reset();
+    }
+    const msg = document.getElementById('form-message');
+    if (msg) {
+        msg.textContent = '';
+    }
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    state.current = null;
+    state.lastText = '';
+    state.versions = [];
+    renderDetail();
+    renderVersions();
+    state.uploads = [];
+    renderUploads();
+    setAIStatus('', false);
     toggleFloorField();
 }
 
