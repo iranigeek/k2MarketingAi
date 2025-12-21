@@ -73,7 +73,7 @@ func applyDefaults(cfg *Config) {
 		cfg.AI.Gemini.Model = "gemini-1.5-pro-latest"
 	}
 	if cfg.AI.Gemini.VisionModel == "" {
-		cfg.AI.Gemini.VisionModel = "gemini-1.5-flash-latest"
+		cfg.AI.Gemini.VisionModel = "gemini-1.5-flash-001"
 	}
 	if cfg.AI.Gemini.TimeoutSeconds <= 0 {
 		cfg.AI.Gemini.TimeoutSeconds = 60

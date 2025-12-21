@@ -27,14 +27,14 @@ type GeminiAnalyzer struct {
 	client *http.Client
 }
 
-const MaxVisionImageBytes = 7 * 1024 * 1024
+const (
+	MaxVisionImageBytes = 7 * 1024 * 1024
+	defaultVisionModel  = "gemini-1.5-flash-001"
+)
 
 // NewGeminiAnalyzer constructs a Gemini-powered image analyzer.
 func NewGeminiAnalyzer(apiKey, model string, timeout time.Duration) *GeminiAnalyzer {
-	if model == "" {
-		model = "gemini-1.5-flash-latest"
-	}
-	model = strings.TrimPrefix(strings.TrimSpace(model), "models/")
+	model = normalizeVisionModel(model)
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
@@ -203,4 +203,18 @@ func detectMime(data []byte, provided string) string {
 		return "image/jpeg"
 	}
 	return mime
+}
+
+func normalizeVisionModel(model string) string {
+	clean := strings.TrimSpace(model)
+	clean = strings.TrimPrefix(clean, "models/")
+	clean = strings.ToLower(clean)
+	clean = strings.TrimSuffix(clean, "-latest")
+
+	switch clean {
+	case "", "gemini-1.5-flash", "gemini-1_5-flash":
+		return defaultVisionModel
+	default:
+		return clean
+	}
 }

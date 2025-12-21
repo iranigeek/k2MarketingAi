@@ -148,7 +148,7 @@ Generering sker via Google Gemini (Generative Language API) när `config.json` i
   "gemini": {
     "api_key": "DIN-GEMINI-NYCKEL",
     "model": "gemini-1.5-pro-latest",
-    "vision_model": "gemini-1.5-flash-latest",
+    "vision_model": "gemini-1.5-flash-001",
     "timeout_seconds": 60
   }
 }
