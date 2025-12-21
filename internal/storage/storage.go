@@ -78,6 +78,23 @@ type Details struct {
 	Association AssociationInfo `json:"association"`
 	Area        AreaInfo        `json:"area"`
 	Advantages  []string        `json:"advantages"`
+	Media       MediaLibrary    `json:"media"`
+}
+
+// MediaLibrary stores related assets (photos, renders, etc.).
+type MediaLibrary struct {
+	Images []ImageAsset `json:"images,omitempty"`
+}
+
+// ImageAsset represents a stored image in S3 or AI renders.
+type ImageAsset struct {
+	URL       string    `json:"url"`
+	Key       string    `json:"key,omitempty"`
+	Label     string    `json:"label,omitempty"`
+	Source    string    `json:"source,omitempty"`
+	Kind      string    `json:"kind,omitempty"`
+	Cover     bool      `json:"cover,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
 }
 
 // MetaInfo controls tone and text strategy.
@@ -185,6 +202,7 @@ type Store interface {
 	ListListings(ctx context.Context) ([]Listing, error)
 	GetListing(ctx context.Context, id string) (Listing, error)
 	UpdateListingSections(ctx context.Context, id string, sections []Section, fullCopy string, history History, status Status) (Listing, error)
+	UpdateListingDetails(ctx context.Context, id string, details Details, imageURL string) (Listing, error)
 	UpdateInsights(ctx context.Context, id string, insights Insights, status Status) (Listing, error)
 	UpdateStatus(ctx context.Context, id string, status Status) error
 	DeleteListing(ctx context.Context, id string) error

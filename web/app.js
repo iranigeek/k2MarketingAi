@@ -8,6 +8,14 @@ const state = {
     listingFilter: '',
     visionAnalysis: null,
     visionDesign: null,
+    visionRemix: {
+        previewURL: '',
+        analysis: null,
+        file: null,
+        status: '',
+    },
+    visionRenderImage: '',
+    editingListingId: null,
 };
 
 function value(id) {
@@ -37,6 +45,7 @@ async function fetchListings() {
         updateTimeSavings();
         updateImageStats();
         renderObjectList();
+        renderVisionLab();
         let idToSelect = state.selectedId;
         if (!idToSelect || !state.listings.some(item => item.id === idToSelect)) {
             idToSelect = state.listings[0]?.id || null;
@@ -56,6 +65,16 @@ async function fetchListings() {
 
 function buildPayloadFromForm() {
     const highlights = listFromLines(value('highlights'));
+    const images = state.uploads
+        .filter(file => file.url && !file.attached)
+        .map((file, index) => ({
+            url: file.url,
+            key: file.key,
+            label: file.name,
+            source: file.source || 'user',
+            kind: file.kind || 'photo',
+            cover: index === 0,
+        }));
     return {
         address: value('address'),
         neighborhood: value('neighborhood'),
@@ -72,6 +91,7 @@ function buildPayloadFromForm() {
         highlights,
         target_audience: 'Bred målgrupp',
         fee: 0,
+        images,
     };
 }
 
@@ -96,7 +116,10 @@ async function handleCreate(e) {
         }
         const created = await res.json();
         state.selectedId = created.id;
+        state.editingListingId = created.id;
         await fetchListings();
+        state.uploads = [];
+        renderUploads();
         document.getElementById('form-message').textContent = 'Annons genererad.';
         setAIStatus('Klar. Du kan markera texten och omskriva.', false, true);
     } catch (err) {
@@ -137,6 +160,8 @@ function renderDetail() {
     const copyBtn = document.getElementById('copy-text-btn');
     const downloadBtn = document.getElementById('download-txt-btn');
     const regenerateBtn = document.getElementById('regenerate-btn');
+    const coverEl = document.getElementById('detail-cover');
+    const galleryEl = document.getElementById('detail-gallery');
 
     if (!detail) {
         header.textContent = 'Ingen annons än';
@@ -145,6 +170,8 @@ function renderDetail() {
         copyBtn.disabled = true;
         downloadBtn.disabled = true;
         regenerateBtn.disabled = true;
+        if (coverEl) coverEl.classList.add('hidden');
+        if (galleryEl) galleryEl.classList.add('hidden');
         renderVisionInsights(null);
         return;
     }
@@ -156,6 +183,25 @@ function renderDetail() {
     copyBtn.disabled = !text;
     downloadBtn.disabled = !text;
     regenerateBtn.disabled = !text;
+    if (coverEl) {
+        if (detail.image_url) {
+            coverEl.innerHTML = `<img src="${detail.image_url}" alt="Omslagsbild för ${detail.address}">`;
+            coverEl.classList.remove('hidden');
+        } else {
+            coverEl.classList.add('hidden');
+            coverEl.innerHTML = '';
+        }
+    }
+    if (galleryEl) {
+        const images = detail.details?.media?.images || [];
+        if (!images.length) {
+            galleryEl.classList.add('hidden');
+            galleryEl.innerHTML = '';
+        } else {
+            galleryEl.classList.remove('hidden');
+            galleryEl.innerHTML = images.map(img => `<img src="${img.url}" alt="${img.label || 'Galleri'}">`).join('');
+        }
+    }
 
     if (text && text !== state.lastText) {
         pushVersion(text, 'Genererad');
@@ -288,12 +334,16 @@ async function handleVisionAnalyze(event) {
 async function handleVisionDesign(event) {
     event.preventDefault();
     const promptEl = document.getElementById('vision-design-prompt');
-    if (!promptEl) return;
-    const prompt = promptEl.value.trim();
-    if (!prompt) {
-        setVisionStatus('design', 'Beskriv ditt önskemål först.', true);
+    const styleEl = document.getElementById('vision-style');
+    if (!promptEl || !styleEl) return;
+    const extra = promptEl.value.trim();
+    const style = styleEl.value;
+    const analysis = state.visionRemix.analysis;
+    if (!analysis && !extra) {
+        setVisionStatus('design', 'Ladda upp en bild eller skriv en instruktion.', true);
         return;
     }
+    const prompt = buildDesignPrompt(style, extra, analysis);
     setVisionStatus('design', 'Skapar designförslag...', false);
     try {
         const res = await fetch('/api/vision/design', {
@@ -313,12 +363,178 @@ async function handleVisionDesign(event) {
     }
 }
 
+async function handleVisionRender() {
+    const promptEl = document.getElementById('vision-design-prompt');
+    const styleEl = document.getElementById('vision-style');
+    if (!styleEl) return;
+    const extra = promptEl?.value.trim() || '';
+    const style = styleEl.value;
+    const analysis = state.visionRemix.analysis;
+    if (!analysis && !extra && !state.visionDesign) {
+        setVisionStatus('render', 'Skapa först en designidé eller skriv instruktioner.', true);
+        return;
+    }
+    const prompt = buildImagePrompt(style, extra, analysis);
+    setVisionStatus('render', 'Genererar visualisering...', false);
+    state.visionRenderImage = '';
+    renderVisionLab();
+    try {
+        const res = await fetch('/api/vision/render', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Kunde inte generera bild');
+        }
+        const data = await res.json();
+        state.visionRenderImage = `data:${data.mime || 'image/png'};base64,${data.data}`;
+        setVisionStatus('render', 'Visualisering klar.', false);
+        renderVisionLab();
+    } catch (err) {
+        state.visionRenderImage = '';
+        setVisionStatus('render', err.message, true);
+        renderVisionLab();
+    }
+}
+
+async function attachRenderToListing() {
+    const select = document.getElementById('vision-render-listing');
+    const statusEl = document.getElementById('vision-render-link-status');
+    if (!select || !statusEl) return;
+    if (!state.visionRenderImage) {
+        statusEl.textContent = 'Generera först en bild.';
+        statusEl.classList.add('error');
+        return;
+    }
+    const listingId = select.value;
+    if (!listingId) {
+        statusEl.textContent = 'Välj vilket objekt bilden ska kopplas till.';
+        statusEl.classList.add('error');
+        return;
+    }
+    statusEl.textContent = 'Kopplar bilden...';
+    statusEl.classList.remove('error');
+    try {
+        const file = await dataURLToFile(state.visionRenderImage, `vision-${Date.now()}.png`);
+        const upload = await uploadMediaFile(file);
+        await attachImageToListing(listingId, {
+            url: upload.url,
+            key: upload.key,
+            source: 'ai',
+            kind: 'render',
+        });
+        statusEl.textContent = 'Bilden kopplades till objektet.';
+        await fetchListings();
+    } catch (err) {
+        statusEl.textContent = err.message;
+        statusEl.classList.add('error');
+    }
+}
+
+async function dataURLToFile(dataUrl, filename) {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    return new File([blob], filename, { type: blob.type || 'image/png' });
+}
+
 function setVisionStatus(type, message, isError) {
-    const id = type === 'design' ? 'vision-design-status' : 'vision-analyze-status';
+    const mapping = {
+        design: 'vision-design-status',
+        analyze: 'vision-analyze-status',
+        remix: 'vision-remix-status',
+        render: 'vision-render-status',
+    };
+    const id = mapping[type] || mapping.analyze;
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = message || '';
     el.classList.toggle('error', Boolean(isError));
+}
+
+function buildDesignPrompt(style, extra, analysis) {
+    const parts = [];
+    if (analysis) {
+        const descriptors = [];
+        if (analysis.summary) {
+            descriptors.push(analysis.summary);
+        }
+        const tagList = []
+            .concat(analysis.notable_details || [])
+            .concat(analysis.tags || []);
+        if (tagList.length) {
+            descriptors.push(`Detaljer att tänka på: ${tagList.join(', ')}`);
+        }
+        if ((analysis.color_palette || []).length) {
+            descriptors.push(`Nuvarande färger: ${(analysis.color_palette || []).join(', ')}`);
+        }
+        const base = [
+            `Utgångsrum: ${analysis.room_type || 'okänt'}`,
+            analysis.style ? `Upplevd stil: ${analysis.style}` : null,
+        ].filter(Boolean).join('. ');
+        parts.push(`${base}. ${descriptors.join(' ')}`);
+    }
+    if (style) {
+        parts.push(`Designen ska kännas "${style}".`);
+    }
+    if (extra) {
+        parts.push(`Extra instruktioner från mäklaren: ${extra}`);
+    }
+    parts.push('Lista vilka möbler, textilier, belysning och dekor som ska läggas till så att ett tomt rum blir komplett.');
+    return parts.join('\n');
+}
+
+function buildImagePrompt(style, extra, analysis) {
+    const parts = [];
+    if (analysis) {
+        parts.push(`Utgå från ett ${analysis.room_type || 'inomhusrum'} som beskrivs så här: ${analysis.summary || ''}`);
+        if ((analysis.color_palette || []).length) {
+            parts.push(`Nuvarande färger: ${(analysis.color_palette || []).join(', ')}`);
+        }
+        if ((analysis.notable_details || []).length) {
+            parts.push(`Detaljer som ska bevaras: ${(analysis.notable_details || []).join(', ')}`);
+        }
+    }
+    if (style) {
+        parts.push(`Övergripande känsla: ${style}.`);
+    }
+    if (extra) {
+        parts.push(`Extra instruktioner: ${extra}`);
+    }
+    const concept = state.visionDesign;
+    if (concept) {
+        if (concept.layout) parts.push(`Layoutidé: ${concept.layout}`);
+        if ((concept.items || []).length) parts.push(`Ny inredning: ${(concept.items || []).join(', ')}`);
+        if ((concept.palette || []).length) parts.push(`Önskade färger: ${(concept.palette || []).join(', ')}`);
+        if (concept.lighting) parts.push(`Ljus: ${concept.lighting}`);
+    }
+    parts.push('Rendera en fotorealistisk interiörbild, 4K-upplösning, naturligt ljus, visa hela rummet.');
+    return parts.join('\n');
+}
+
+async function attachImageToListing(id, asset) {
+    const res = await fetch(`/api/listings/${id}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(asset),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Misslyckades med att koppla bild');
+    }
+    const listing = await res.json();
+    const idx = state.listings.findIndex(item => item.id === listing.id);
+    if (idx !== -1) {
+        state.listings[idx] = listing;
+    } else {
+        state.listings.unshift(listing);
+    }
+    if (state.current && state.current.id === listing.id) {
+        state.current = listing;
+        renderDetail();
+    }
+    renderObjectList();
 }
 
 function renderVisionLab() {
@@ -361,6 +577,107 @@ function renderVisionLab() {
                 ${buildList(concept.notes, 'Noteringar')}
             `;
         }
+    }
+
+    const remixPreview = document.getElementById('vision-remix-preview');
+    if (remixPreview) {
+        if (state.visionRemix.previewURL) {
+            remixPreview.innerHTML = `<img src="${state.visionRemix.previewURL}" alt="Förhandsvisning av rum">`;
+        } else {
+            remixPreview.innerHTML = '<p>Ladda upp eller släpp en bild här</p>';
+        }
+    }
+
+    const remixAnalysis = document.getElementById('vision-remix-analysis');
+    if (remixAnalysis) {
+        const insight = state.visionRemix.analysis;
+        if (!insight) {
+            remixAnalysis.innerHTML = '<p class="muted">Ingen bild ännu.</p>';
+        } else {
+            const badges = []
+                .concat(insight.notable_details || [])
+                .concat(insight.tags || [])
+                .slice(0, 6);
+            remixAnalysis.innerHTML = `
+                <h4>${insight.room_type || 'Okänt rum'}</h4>
+                <p>${insight.summary || 'Ingen sammanfattning.'}</p>
+                ${insight.style ? `<p><strong>Stil:</strong> ${insight.style}</p>` : ''}
+                ${(insight.color_palette || []).length ? `<p><strong>Färger:</strong> ${(insight.color_palette || []).join(', ')}</p>` : ''}
+                ${badges.length ? `<div class="vision-badges">${badges.map(tag => `<span class="vision-badge">${tag}</span>`).join('')}</div>` : ''}
+            `;
+        }
+    }
+
+    const renderOutput = document.getElementById('vision-render-output');
+    if (renderOutput) {
+        if (state.visionRenderImage) {
+            renderOutput.innerHTML = `<img src="${state.visionRenderImage}" alt="AI-genererad visualisering">`;
+        } else {
+            renderOutput.innerHTML = '<p class="muted">Ingen bild genererad ännu.</p>';
+        }
+    }
+    const renderSelect = document.getElementById('vision-render-listing');
+    if (renderSelect) {
+        const prev = renderSelect.value;
+        renderSelect.innerHTML = '<option value="">Välj objekt</option>' + state.listings.map(item => `<option value="${item.id}">${item.address || 'Namnlöst objekt'}</option>`).join('');
+        if (prev && state.listings.some(item => item.id === prev)) {
+            renderSelect.value = prev;
+        }
+    }
+    const attachBtn = document.getElementById('vision-render-attach');
+    if (attachBtn) {
+        attachBtn.disabled = !state.visionRenderImage;
+    }
+    const linkStatus = document.getElementById('vision-render-link-status');
+    if (linkStatus && !state.visionRenderImage) {
+        linkStatus.textContent = '';
+        linkStatus.classList.remove('error');
+    }
+}
+
+function handleRemixImageChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+        processRemixFile(file);
+    }
+}
+
+function processRemixFile(file) {
+    if (!file.type.startsWith('image/')) {
+        setVisionStatus('remix', 'Välj en bildfil (jpg/png).', true);
+        return;
+    }
+    state.visionRemix.file = file;
+    state.visionRemix.analysis = null;
+    const reader = new FileReader();
+    reader.onload = () => {
+        state.visionRemix.previewURL = reader.result;
+        renderVisionLab();
+    };
+    reader.readAsDataURL(file);
+    analyzeRemixImage(file);
+}
+
+async function analyzeRemixImage(file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image_file', file);
+    setVisionStatus('remix', 'Analyserar rummet...', false);
+    try {
+        const res = await fetch('/api/vision/analyze', {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Kunde inte analysera bilden');
+        }
+        state.visionRemix.analysis = await res.json();
+        setVisionStatus('remix', 'Rummet är förstått.', false);
+        renderVisionLab();
+    } catch (err) {
+        state.visionRemix.analysis = null;
+        setVisionStatus('remix', err.message, true);
     }
 }
 
@@ -434,7 +751,10 @@ function bindEvents() {
     document.getElementById('copy-text-btn').addEventListener('click', copyFullText);
     document.getElementById('download-txt-btn').addEventListener('click', downloadText);
     document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('file-input').click());
-    document.getElementById('file-input').addEventListener('change', handleFiles);
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+        await handleFiles(e);
+        e.target.value = '';
+    });
     const visionAnalyzeForm = document.getElementById('vision-analyze-form');
     if (visionAnalyzeForm) {
         visionAnalyzeForm.addEventListener('submit', handleVisionAnalyze);
@@ -443,15 +763,43 @@ function bindEvents() {
     if (visionDesignForm) {
         visionDesignForm.addEventListener('submit', handleVisionDesign);
     }
+    const visionRenderBtn = document.getElementById('vision-render-btn');
+    if (visionRenderBtn) {
+        visionRenderBtn.addEventListener('click', handleVisionRender);
+    }
+    const visionRenderAttachBtn = document.getElementById('vision-render-attach');
+    if (visionRenderAttachBtn) {
+        visionRenderAttachBtn.addEventListener('click', attachRenderToListing);
+    }
+    const remixImageInput = document.getElementById('vision-remix-image');
+    if (remixImageInput) {
+        remixImageInput.addEventListener('change', handleRemixImageChange);
+    }
+    const remixPreview = document.getElementById('vision-remix-preview');
+    if (remixPreview) {
+        remixPreview.addEventListener('dragover', e => {
+            e.preventDefault();
+            remixPreview.classList.add('dragging');
+        });
+        remixPreview.addEventListener('dragleave', () => remixPreview.classList.remove('dragging'));
+        remixPreview.addEventListener('drop', e => {
+            e.preventDefault();
+            remixPreview.classList.remove('dragging');
+            const file = e.dataTransfer?.files?.[0];
+            if (file) {
+                processRemixFile(file);
+            }
+        });
+    }
 
     const dropzone = document.getElementById('dropzone');
     dropzone.addEventListener('click', () => document.getElementById('file-input').click());
     dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
     dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
-    dropzone.addEventListener('drop', e => {
+    dropzone.addEventListener('drop', async e => {
         e.preventDefault();
         dropzone.classList.remove('dragging');
-        handleFiles({ target: { files: e.dataTransfer.files } });
+        await handleFiles({ target: { files: e.dataTransfer.files } });
     });
 
     document.getElementById('clear-versions').addEventListener('click', () => {
@@ -603,6 +951,14 @@ function renderObjectList() {
             card.classList.add('active');
         }
 
+        const headerWrap = document.createElement('div');
+        headerWrap.className = 'object-card__header';
+        const thumb = document.createElement('div');
+        thumb.className = 'object-card__thumb';
+        if (listing.image_url) {
+            thumb.style.backgroundImage = `url(${listing.image_url})`;
+        }
+
         const title = document.createElement('div');
         title.className = 'object-card__title';
         title.textContent = listing.address || 'Namnlöst objekt';
@@ -614,6 +970,15 @@ function renderObjectList() {
         const status = document.createElement('div');
         status.className = 'object-card__status';
         status.textContent = buildListingStatus(listing);
+
+        const body = document.createElement('div');
+        body.className = 'object-card__body';
+        body.appendChild(title);
+        body.appendChild(meta);
+        body.appendChild(status);
+        headerWrap.appendChild(thumb);
+        headerWrap.appendChild(body);
+        card.appendChild(headerWrap);
 
         const actions = document.createElement('div');
         actions.className = 'object-card__actions';
@@ -729,6 +1094,7 @@ function resetGeneratorForm() {
     state.current = null;
     state.lastText = '';
     state.versions = [];
+    state.editingListingId = null;
     renderDetail();
     renderVersions();
     state.uploads = [];
@@ -759,18 +1125,74 @@ function incrementRewriteStat() {
     el.textContent = current + 1;
 }
 
-function handleFiles(event) {
-    const files = Array.from(event.target.files || []);
+async function handleFiles(event) {
+    const files = Array.from(event.target.files || event.dataTransfer?.files || []);
     if (!files.length) return;
-    files.forEach(file => {
-        state.uploads.push({ name: file.name, status: 'Analyserar...', size: file.size });
-    });
+    for (const file of files) {
+        await queueUpload(file, state.editingListingId);
+    }
     renderUploads();
-    simulateImageAnalysis();
+}
+
+async function queueUpload(file, targetListingId) {
+    const entry = {
+        name: file.name,
+        size: file.size,
+        status: 'Laddar upp...',
+        kind: 'photo',
+        source: 'user',
+        attached: Boolean(targetListingId),
+    };
+    state.uploads.push(entry);
+    renderUploads();
+    try {
+        const result = await uploadMediaFile(file);
+        entry.url = result.url;
+        entry.key = result.key;
+        if (targetListingId) {
+            entry.status = 'Kopplar till objekt...';
+            await attachImageToListing(targetListingId, {
+                url: result.url,
+                key: result.key,
+                source: 'user',
+                kind: 'photo',
+            });
+            entry.status = 'Tillagd i objekt';
+        } else {
+            entry.status = 'Klar';
+        }
+    } catch (err) {
+        entry.status = err.message || 'Fel vid uppladdning';
+        entry.error = err.message;
+    }
+    renderUploads();
+}
+
+async function uploadMediaFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/uploads', {
+        method: 'POST',
+        body: formData,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Misslyckades med uppladdning');
+    }
+    const payload = await res.json();
+    const normalized = {
+        url: payload.url || payload.URL || '',
+        key: payload.key || payload.Key || '',
+    };
+    if (!normalized.url) {
+        throw new Error('Uppladdningen saknar URL – kontrollera S3-konfigurationen.');
+    }
+    return normalized;
 }
 
 function renderUploads() {
     const list = document.getElementById('upload-list');
+    if (!list) return;
     list.innerHTML = '';
     state.uploads.forEach(file => {
         const item = document.createElement('div');
@@ -785,17 +1207,6 @@ function renderUploads() {
         list.appendChild(item);
     });
     updateImageStats();
-}
-
-function simulateImageAnalysis() {
-    const status = document.getElementById('ai-status');
-    setAIStatus('Analyserar bilder och filer...', true);
-    setTimeout(() => {
-        state.uploads = state.uploads.map(file => ({ ...file, status: 'Analyserad' }));
-        renderUploads();
-        updateImageStats();
-        setAIStatus('Bildanalys klar. Förbättrade ton och detaljer i texten.', false, true);
-    }, 1200);
 }
 
 function setAIStatus(message, busy, hideLater) {
@@ -826,7 +1237,10 @@ async function startEditListing(id) {
     await selectListing(id);
     const detail = state.current || state.listings.find(item => item.id === id);
     if (!detail) return;
+    state.editingListingId = id;
     populateFormFromListing(detail);
+    state.uploads = [];
+    renderUploads();
     showView('generator');
     document.getElementById('listing-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -984,7 +1398,7 @@ function updateSidebarToggleState() {
 }
 
 function updateImageStats() {
-    const processed = state.uploads.filter(file => file.status === 'Analyserad').length;
+    const processed = state.uploads.filter(file => file.url).length;
     const el = document.getElementById('stat-images');
     const avgEl = document.getElementById('stat-images-avg');
     const listingCount = state.listings.length;

@@ -38,12 +38,14 @@ func main() {
 	var uploader media.Uploader
 	if cfg.Media.Bucket != "" && cfg.Media.Region != "" {
 		uploader, err = media.NewUploader(ctx, media.Config{
-			Bucket:         cfg.Media.Bucket,
-			Region:         cfg.Media.Region,
-			Endpoint:       cfg.Media.Endpoint,
-			PublicURL:      cfg.Media.PublicURL,
-			KeyPrefix:      cfg.Media.KeyPrefix,
-			ForcePathStyle: cfg.Media.ForcePathStyle,
+			Bucket:          cfg.Media.Bucket,
+			Region:          cfg.Media.Region,
+			Endpoint:        cfg.Media.Endpoint,
+			PublicURL:       cfg.Media.PublicURL,
+			KeyPrefix:       cfg.Media.KeyPrefix,
+			ForcePathStyle:  cfg.Media.ForcePathStyle,
+			AccessKeyID:     cfg.Media.AccessKeyID,
+			SecretAccessKey: cfg.Media.SecretAccessKey,
 		})
 		if err != nil {
 			log.Fatalf("failed to init media uploader: %v", err)
@@ -66,6 +68,7 @@ func main() {
 		generator      generation.Generator
 		visionAnalyzer vision.Analyzer
 		visionDesigner vision.Designer
+		visionRenderer vision.ImageGenerator
 	)
 	switch {
 	case strings.EqualFold(cfg.AI.Provider, "gemini") && cfg.AI.Gemini.APIKey != "":
@@ -74,6 +77,7 @@ func main() {
 		generator = generation.NewLLM(geminiClient)
 		visionAnalyzer = vision.NewGeminiAnalyzer(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.VisionModel, timeout)
 		visionDesigner = vision.NewGeminiDesigner(geminiClient)
+		visionRenderer = vision.NewGeminiImageGenerator(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.ImageModel, timeout)
 		log.Println("generator ready: Gemini")
 	default:
 		generator = generation.NewHeuristic()
@@ -95,6 +99,7 @@ func main() {
 	visionHandler := vision.Handler{
 		Analyzer: visionAnalyzer,
 		Designer: visionDesigner,
+		Renderer: visionRenderer,
 	}
 	srv := server.New(cfg.Port, listingHandler, visionHandler, staticFS)
 

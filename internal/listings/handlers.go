@@ -39,24 +39,25 @@ type Handler struct {
 
 // CreateListingRequest describes inbound payload for creating a listing.
 type CreateListingRequest struct {
-	Address        string         `json:"address"`
-	Neighborhood   string         `json:"neighborhood"`
-	City           string         `json:"city"`
-	PropertyType   string         `json:"property_type"`
-	Condition      string         `json:"condition"`
-	Balcony        bool           `json:"balcony"`
-	Floor          string         `json:"floor"`
-	Association    string         `json:"association"`
-	Length         string         `json:"length"`
-	Tone           string         `json:"tone"`
-	TargetAudience string         `json:"target_audience"`
-	Highlights     []string       `json:"highlights"`
-	ImageURL       string         `json:"image_url,omitempty"`
-	Fee            int            `json:"fee"`
-	LivingArea     float64        `json:"living_area"`
-	Rooms          float64        `json:"rooms"`
-	Instructions   string         `json:"instructions"`
-	Sections       []SectionInput `json:"sections"`
+	Address        string               `json:"address"`
+	Neighborhood   string               `json:"neighborhood"`
+	City           string               `json:"city"`
+	PropertyType   string               `json:"property_type"`
+	Condition      string               `json:"condition"`
+	Balcony        bool                 `json:"balcony"`
+	Floor          string               `json:"floor"`
+	Association    string               `json:"association"`
+	Length         string               `json:"length"`
+	Tone           string               `json:"tone"`
+	TargetAudience string               `json:"target_audience"`
+	Highlights     []string             `json:"highlights"`
+	ImageURL       string               `json:"image_url,omitempty"`
+	Fee            int                  `json:"fee"`
+	LivingArea     float64              `json:"living_area"`
+	Rooms          float64              `json:"rooms"`
+	Instructions   string               `json:"instructions"`
+	Sections       []SectionInput       `json:"sections"`
+	Images         []storage.ImageAsset `json:"images"`
 }
 
 // SectionInput allows custom section configuration from the client.
@@ -111,6 +112,9 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "image upload not configured", http.StatusInternalServerError)
 			return
 		}
+		if upload.filename == "" {
+			upload.filename = "photo.jpg"
+		}
 		result, err := h.Uploader.Upload(r.Context(), media.UploadInput{
 			Filename:    upload.filename,
 			ContentType: upload.contentType,
@@ -128,6 +132,15 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		imageURL = result.URL
+		newAsset := storage.ImageAsset{
+			URL:    result.URL,
+			Key:    result.Key,
+			Label:  upload.filename,
+			Source: "user",
+			Kind:   "photo",
+			Cover:  true,
+		}
+		req.Images = append([]storage.ImageAsset{newAsset}, req.Images...)
 	}
 
 	listing := storage.Listing{
@@ -152,6 +165,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Insights:       storage.Insights{},
 		CreatedAt:      time.Now(),
 	}
+	applyImagesToListing(&listing, req.Images)
 	hydrateDetailsFromLegacy(&listing)
 
 	if h.GeoProvider != nil {
@@ -473,6 +487,137 @@ func (h Handler) DeleteListing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UploadMedia handles raw file uploads to the configured uploader (S3).
+func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
+	if h.Uploader == nil {
+		http.Error(w, "uploads disabled", http.StatusNotImplemented)
+		return
+	}
+	if err := r.ParseMultipartForm(maxImageBytes + (1 << 20)); err != nil {
+		http.Error(w, fmt.Sprintf("invalid upload payload: %v", err), http.StatusBadRequest)
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "file is required", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxImageBytes+1))
+	if err != nil {
+		http.Error(w, "could not read file", http.StatusBadRequest)
+		return
+	}
+	if len(data) == 0 {
+		http.Error(w, "file was empty", http.StatusBadRequest)
+		return
+	}
+	if len(data) > maxImageBytes {
+		http.Error(w, fmt.Sprintf("file exceeds %d MB", maxImageBytes/(1024*1024)), http.StatusBadRequest)
+		return
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+
+	result, err := h.Uploader.Upload(r.Context(), media.UploadInput{
+		Filename:    header.Filename,
+		ContentType: contentType,
+		Body:        bytes.NewReader(data),
+		Size:        int64(len(data)),
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, media.ErrUploaderDisabled) {
+			status = http.StatusBadRequest
+		} else {
+			log.Printf("upload failed: %v", err)
+		}
+		http.Error(w, "could not upload file", status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+// AttachImage wires an uploaded image to an existing listing.
+func (h Handler) AttachImage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		URL    string `json:"url"`
+		Key    string `json:"key"`
+		Label  string `json:"label"`
+		Source string `json:"source"`
+		Kind   string `json:"kind"`
+		Cover  bool   `json:"cover"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		http.Error(w, "url is required", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.Store.GetListing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	asset := storage.ImageAsset{
+		URL:       strings.TrimSpace(req.URL),
+		Key:       strings.TrimSpace(req.Key),
+		Label:     strings.TrimSpace(req.Label),
+		Source:    strings.TrimSpace(req.Source),
+		Kind:      strings.TrimSpace(req.Kind),
+		Cover:     req.Cover,
+		CreatedAt: time.Now(),
+	}
+	if asset.Source == "" {
+		asset.Source = "user"
+	}
+	if asset.Kind == "" {
+		asset.Kind = "photo"
+	}
+
+	listing.Details.Media.Images = append(listing.Details.Media.Images, asset)
+	if asset.Cover || listing.ImageURL == "" {
+		listing.ImageURL = asset.URL
+		for i := range listing.Details.Media.Images {
+			listing.Details.Media.Images[i].Cover = listing.Details.Media.Images[i].URL == asset.URL
+		}
+	}
+
+	updated, err := h.Store.UpdateListingDetails(r.Context(), id, listing.Details, listing.ImageURL)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	hydrateDetailsFromLegacy(&updated)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+	h.publishListing(updated)
+}
+
 // StreamEvents streams status updates over SSE.
 func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	if h.Events == nil {
@@ -615,6 +760,64 @@ func trimCreateRequest(req *CreateListingRequest) {
 	req.TargetAudience = strings.TrimSpace(req.TargetAudience)
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
 	req.Instructions = strings.TrimSpace(req.Instructions)
+}
+
+func applyImagesToListing(listing *storage.Listing, assets []storage.ImageAsset) {
+	normalized := normalizeAssets(assets)
+	if len(normalized) == 0 {
+		return
+	}
+	listing.Details.Media.Images = append(listing.Details.Media.Images, normalized...)
+	ensureCoverImage(listing)
+}
+
+func normalizeAssets(assets []storage.ImageAsset) []storage.ImageAsset {
+	if len(assets) == 0 {
+		return nil
+	}
+	now := time.Now()
+	normalized := make([]storage.ImageAsset, 0, len(assets))
+	for _, asset := range assets {
+		asset.URL = strings.TrimSpace(asset.URL)
+		if asset.URL == "" {
+			continue
+		}
+		if asset.Source == "" {
+			asset.Source = "user"
+		}
+		if asset.Kind == "" {
+			asset.Kind = "photo"
+		}
+		if asset.CreatedAt.IsZero() {
+			asset.CreatedAt = now
+		}
+		normalized = append(normalized, asset)
+	}
+	return normalized
+}
+
+func ensureCoverImage(listing *storage.Listing) {
+	images := listing.Details.Media.Images
+	if len(images) == 0 {
+		return
+	}
+	if listing.ImageURL != "" {
+		for i := range images {
+			images[i].Cover = images[i].URL == listing.ImageURL
+		}
+		return
+	}
+
+	for i := range images {
+		if images[i].Cover && images[i].URL != "" {
+			listing.ImageURL = images[i].URL
+			return
+		}
+	}
+
+	images[0].Cover = true
+	listing.ImageURL = images[0].URL
+	listing.Details.Media.Images = images
 }
 
 func buildDefaultSections(req CreateListingRequest, imageURL string) []storage.Section {

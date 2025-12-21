@@ -106,6 +106,9 @@ Aktivera genom att sätta följande nycklar i `config.json`:
 | `media.public_url` | (Valfri) Publik bas-URL/CNAME om du serverar via CloudFront el. liknande |
 | `media.endpoint` | (Valfri) Eget endpoint för S3-kompatibel lagring, används ihop med `media.force_path_style=true` för t.ex. MinIO/Wasabi |
 | `media.force_path_style` | Sätt till `true` om din endpoint kräver path-style URL:er |
+| `media.access_key_id` | (Valfri) AWS Access Key ID. Lämna tomt om du använder instans-/rollbaserade credentials |
+| `media.secret_access_key` | (Valfri) AWS Secret Access Key |
+| `media.session_token` | (Valfri) Session token om du använder tillfälliga credentials |
 
 > Tips: Om du kör lokalt mot MinIO kan du sätta `S3_ENDPOINT=http://localhost:9000`, `S3_FORCE_PATH_STYLE=true` och `S3_PUBLIC_URL=http://localhost:9000/<bucket>` för att kunna förhandsgranska bilderna.
 
@@ -121,6 +124,10 @@ Om `S3_BUCKET` eller `S3_REGION` utelämnas faller uppladdningar tillbaka till e
 - `POST /api/vision/design` – lämna textinstruktioner (t.ex. ”Brun lädersoffa, låg tv-bänk i ek...”) och få ett komplett designförslag (layout, möbler, färger, belysning).
 
 I webbgränssnittet finns fliken **Bildstudio** där båda funktionerna finns med formulär och resultatpaneler.
+
+Design-kortet erbjuder nu en enkel “före/efter”-upplevelse: ladda upp en tom rum-bild, välj förinställd känsla (lyxigt, varmt, minimalistiskt…) och lägg till egna instruktioner som “sätt in en king size-säng med tavlor ovanför”. Appen analyserar bilden automagiskt och använder den plus din stil för att generera ett färdigt möbleringsförslag med möbler, färger, belysning och dekor. När du är nöjd klickar du på **Generera bild** så renderas en fotorealistisk mockup via Google Gemini och visas direkt i panelen.
+
+Generator-flödet laddar nu upp dina egna bilder direkt till S3 och sparar dem på objektet (första bilden blir omslagsbilden i listan). I Bildstudion kan du dessutom koppla en genererad bild till valfritt objekt – ett klick laddar upp renderingen till samma bucket och lägger den i objektets galleri.
 
 ## Modulär text & geodata
 
@@ -149,12 +156,13 @@ Generering sker via Google Gemini (Generative Language API) när `config.json` i
     "api_key": "DIN-GEMINI-NYCKEL",
     "model": "gemini-1.5-pro-latest",
     "vision_model": "gemini-1.5-flash-001",
+    "image_model": "gemini-2.5-flash-image",
     "timeout_seconds": 60
   }
 }
 ```
 
-`vision_model` styr vilken Gemini-modell som används för automatisk bildanalys (flash är snabb och räcker gott). `timeout_seconds` går att tweaka om du behöver längre (eller kortare) väntetid för anropen; standarden är 60 sekunder.
+`vision_model` styr bildanalysen och `image_model` används för renderingen (kräver en modell med inline-bildstöd, t.ex. `gemini-2.5-flash-image`). `timeout_seconds` går att tweaka om du behöver längre (eller kortare) väntetid för anropen; standarden är 60 sekunder.
 
 Geodata hämtas via Google Geocoding + Places. Lägg nyckeln i `config.json`:
 

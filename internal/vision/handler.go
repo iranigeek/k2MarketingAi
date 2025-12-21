@@ -12,6 +12,7 @@ import (
 type Handler struct {
 	Analyzer Analyzer
 	Designer Designer
+	Renderer ImageGenerator
 }
 
 // Analyze handles POST /api/vision/analyze.
@@ -104,6 +105,31 @@ func (h Handler) Design(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, concept)
+}
+
+// Render handles POST /api/vision/render by generating an illustrative image.
+func (h Handler) Render(w http.ResponseWriter, r *http.Request) {
+	if h.Renderer == nil {
+		http.Error(w, "vision rendering inactive", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Prompt) == "" {
+		http.Error(w, "prompt is required", http.StatusBadRequest)
+		return
+	}
+	result, err := h.Renderer.Generate(r.Context(), req.Prompt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, result)
 }
 
 func writeJSON(w http.ResponseWriter, payload any) {

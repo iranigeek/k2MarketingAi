@@ -31,11 +31,13 @@ func New(port string, listingHandler listings.Handler, visionHandler vision.Hand
 	})
 
 	router.Route("/api", func(r chi.Router) {
+		r.Post("/uploads", listingHandler.UploadMedia)
 		r.Route("/listings", func(r chi.Router) {
 			r.Get("/", listingHandler.List)
 			r.Post("/", listingHandler.Create)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", listingHandler.Get)
+				r.Post("/images", listingHandler.AttachImage)
 				r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
 				r.Patch("/sections/{slug}", listingHandler.UpdateSection)
 				r.Delete("/sections/{slug}", listingHandler.DeleteSection)
@@ -47,6 +49,7 @@ func New(port string, listingHandler listings.Handler, visionHandler vision.Hand
 		r.Route("/vision", func(r chi.Router) {
 			r.Post("/analyze", visionHandler.Analyze)
 			r.Post("/design", visionHandler.Design)
+			r.Post("/render", visionHandler.Render)
 		})
 	})
 

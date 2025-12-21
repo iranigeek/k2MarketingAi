@@ -185,6 +185,8 @@
                         </div>
                     </header>
                     <div class="editor__body">
+                        <div id="detail-cover" class="detail-cover hidden" aria-live="polite"></div>
+                        <div id="detail-gallery" class="detail-gallery hidden" aria-live="polite"></div>
                         <textarea id="full-editor" class="full-editor" placeholder="Generera annons för att börja" readonly></textarea>
                         <div id="ai-status" class="ai-status hidden"></div>
                         <div id="vision-insights" class="vision-insights hidden" aria-live="polite">
@@ -250,16 +252,62 @@
                             <p class="muted">Ingen analys ännu.</p>
                         </div>
                     </article>
-                    <article class="vision-card">
-                        <h3>Designa rum</h3>
-                        <p class="muted">Beskriv hur du vill möblera eller styla ett rum – AI:n föreslår layout, möbler och färger.</p>
-                        <form id="vision-design-form" class="vision-form">
-                            <textarea id="vision-design-prompt" rows="4" placeholder="Ex: Skapa ett vardagsrum med brun lädersoffa, tv-bänk i ek och moderna lampor."></textarea>
-                            <button type="submit" class="secondary">Skapa designförslag</button>
-                            <p id="vision-design-status" class="vision-status muted"></p>
-                        </form>
-                        <div id="vision-design-output" class="vision-result">
-                            <p class="muted">Inget designförslag ännu.</p>
+                    <article class="vision-card vision-remix-card">
+                        <h3>Designa om rummet</h3>
+                        <p class="muted">Ladda upp en bild på ett tomt rum, välj känsla eller beskriv drömstilen – AI:n föreslår möbler, färger och detaljer.</p>
+                        <div class="vision-remix-grid">
+                            <div class="vision-remix-pane">
+                                <p class="eyebrow">Utgångsbild</p>
+                                <label class="remix-upload" for="vision-remix-image">
+                                    <input id="vision-remix-image" type="file" accept="image/*" hidden>
+                                    <div id="vision-remix-preview" class="remix-preview">
+                                        <p>Ladda upp eller släpp en bild här</p>
+                                    </div>
+                                    <button type="button" class="ghost">Välj bild</button>
+                                </label>
+                                <p id="vision-remix-status" class="vision-status muted"></p>
+                                <div id="vision-remix-analysis" class="vision-result small">
+                                    <p class="muted">Ingen bild ännu.</p>
+                                </div>
+                            </div>
+                            <div class="vision-remix-pane">
+                                <form id="vision-design-form" class="vision-form">
+                                    <label for="vision-style">Välj stil</label>
+                                    <select id="vision-style">
+                                        <option value="Lyxigt hotellrum">Lyxigt hotellrum</option>
+                                        <option value="Varmt och ombonat">Varmt och ombonat</option>
+                                        <option value="Modern minimalistisk">Modern minimalistisk</option>
+                                        <option value="Naturligt med trä och textil">Naturligt med trä och textil</option>
+                                        <option value="Sval nordisk studio">Sval nordisk studio</option>
+                                    </select>
+                                    <label for="vision-design-prompt">Extra instruktioner</label>
+                                    <textarea id="vision-design-prompt" rows="4" placeholder="Ex: Lägg till en king size-säng med hotellkänsla och grafiska tavlor ovanför."></textarea>
+                                    <button type="submit" class="secondary">Designa rummet</button>
+                                    <p id="vision-design-status" class="vision-status muted"></p>
+                                </form>
+                                <div id="vision-design-output" class="vision-result">
+                                    <p class="muted">Inget designförslag ännu.</p>
+                                </div>
+                                <div class="vision-render">
+                                    <div class="vision-render__header">
+                                        <p class="eyebrow">Visualisering</p>
+                                        <button type="button" class="ghost" id="vision-render-btn">Generera bild</button>
+                                    </div>
+                                    <p class="muted small">Använder Google Gemini för att skapa en fotorealistisk mockup av ditt rum.</p>
+                                    <p id="vision-render-status" class="vision-status muted"></p>
+                                    <div id="vision-render-output" class="vision-render-output">
+                                        <p class="muted">Ingen bild genererad ännu.</p>
+                                    </div>
+                                    <div class="vision-render__attach">
+                                        <label for="vision-render-listing" class="small muted">Koppla bild till objekt</label>
+                                        <select id="vision-render-listing">
+                                            <option value="">Välj objekt</option>
+                                        </select>
+                                        <button type="button" class="secondary" id="vision-render-attach" disabled>Koppla bilden</button>
+                                        <p id="vision-render-link-status" class="vision-status muted"></p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </article>
                 </div>

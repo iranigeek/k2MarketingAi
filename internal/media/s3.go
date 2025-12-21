@@ -10,18 +10,21 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 )
 
 // Config represents the settings required to talk to S3 or an S3-compatible API.
 type Config struct {
-	Bucket         string
-	Region         string
-	Endpoint       string
-	PublicURL      string
-	KeyPrefix      string
-	ForcePathStyle bool
+	Bucket          string
+	Region          string
+	Endpoint        string
+	PublicURL       string
+	KeyPrefix       string
+	ForcePathStyle  bool
+	AccessKeyID     string
+	SecretAccessKey string
 }
 
 // NewUploader wires an S3 client if the configuration is complete, otherwise a disabled uploader.
@@ -47,6 +50,12 @@ func NewUploader(ctx context.Context, cfg Config) (Uploader, error) {
 				}
 				return aws.Endpoint{}, &aws.EndpointNotFoundError{}
 			}),
+		))
+	}
+
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
+		loadOpts = append(loadOpts, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 		))
 	}
 

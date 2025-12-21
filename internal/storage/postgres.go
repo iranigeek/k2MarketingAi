@@ -124,6 +124,24 @@ func (s *PostgresStore) UpdateListingSections(ctx context.Context, id string, se
 	return item, nil
 }
 
+// UpdateListingDetails replaces the details JSONB (including media) and optionally the cover image.
+func (s *PostgresStore) UpdateListingDetails(ctx context.Context, id string, details Details, imageURL string) (Listing, error) {
+	payload, err := json.Marshal(details)
+	if err != nil {
+		return Listing{}, fmt.Errorf("marshal details: %w", err)
+	}
+
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET details=$2, image_url=$3 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at`, id, payload, imageURL)
+	item, scanErr := scanListing(row)
+	if scanErr != nil {
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			return Listing{}, ErrNotFound
+		}
+		return Listing{}, scanErr
+	}
+	return item, nil
+}
+
 // UpdateInsights replaces insights JSON and optionally pipeline status.
 func (s *PostgresStore) UpdateInsights(ctx context.Context, id string, insights Insights, status Status) (Listing, error) {
 	insightsJSON, err := json.Marshal(insights)

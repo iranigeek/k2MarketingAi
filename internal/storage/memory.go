@@ -94,6 +94,21 @@ func (s *InMemoryStore) UpdateListingSections(_ context.Context, id string, sect
 	return Listing{}, ErrNotFound
 }
 
+// UpdateListingDetails updates the details JSON and cover image.
+func (s *InMemoryStore) UpdateListingDetails(_ context.Context, id string, details Details, imageURL string) (Listing, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for idx, l := range s.listings {
+		if l.ID == id {
+			s.listings[idx].Details = details
+			s.listings[idx].ImageURL = imageURL
+			return s.listings[idx], nil
+		}
+	}
+	return Listing{}, ErrNotFound
+}
+
 // UpdateInsights stores refreshed insights and status for a listing.
 func (s *InMemoryStore) UpdateInsights(_ context.Context, id string, insights Insights, status Status) (Listing, error) {
 	s.mu.Lock()
