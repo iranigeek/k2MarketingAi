@@ -12,6 +12,11 @@ import (
 	"k2MarketingAi/internal/vision"
 )
 
+const (
+	defaultReadTimeout  = 30 * time.Second
+	defaultWriteTimeout = 2 * time.Minute
+)
+
 // New constructs the HTTP server with routes and middleware.
 func New(port string, listingHandler listings.Handler, visionHandler vision.Handler, staticFS http.Handler) *http.Server {
 	router := chi.NewRouter()
@@ -51,8 +56,8 @@ func New(port string, listingHandler listings.Handler, visionHandler vision.Hand
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      router,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  defaultReadTimeout,
+		WriteTimeout: defaultWriteTimeout,
 		IdleTimeout:  60 * time.Second,
 	}
 
