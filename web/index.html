@@ -300,9 +300,11 @@
                                     </div>
                                     <div class="vision-render__attach">
                                         <label for="vision-render-listing" class="small muted">Koppla bild till objekt</label>
-                                        <select id="vision-render-listing">
+                                        <select id="vision-render-listing" aria-label="Välj objekt att koppla bilden till">
                                             <option value="">Välj objekt</option>
                                         </select>
+                                        <label for="vision-render-note" class="small muted">Extra instruktioner (t.ex. “Behåll kameravinkeln”)</label>
+                                        <textarea id="vision-render-note" rows="2" placeholder="Beskriv detaljer som måste bevaras: vinklar, fönster, dörrar..."></textarea>
                                         <button type="button" class="secondary" id="vision-render-attach" disabled>Koppla bilden</button>
                                         <p id="vision-render-link-status" class="vision-status muted"></p>
                                     </div>

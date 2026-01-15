@@ -13,8 +13,11 @@ const state = {
         analysis: null,
         file: null,
         status: '',
+        storageURL: '',
+        storageKey: '',
     },
     visionRenderImage: '',
+    visionRenderAsset: null,
     editingListingId: null,
 };
 
@@ -377,23 +380,41 @@ async function handleVisionRender() {
     const prompt = buildImagePrompt(style, extra, analysis);
     setVisionStatus('render', 'Genererar visualisering...', false);
     state.visionRenderImage = '';
+    state.visionRenderAsset = null;
     renderVisionLab();
+    const baseImageData = (state.visionRemix.previewURL || '').startsWith('data:')
+        ? state.visionRemix.previewURL
+        : '';
+    const baseImageURL = !baseImageData
+        ? state.visionRemix.storageURL || state.current?.image_url || ''
+        : '';
     try {
         const res = await fetch('/api/vision/render', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
+            body: JSON.stringify({
+                prompt,
+                base_image_data: baseImageData,
+                base_image_url: baseImageURL,
+            }),
         });
         if (!res.ok) {
             const txt = await res.text();
             throw new Error(txt || 'Kunde inte generera bild');
         }
         const data = await res.json();
-        state.visionRenderImage = `data:${data.mime || 'image/png'};base64,${data.data}`;
+        if (data.url) {
+            state.visionRenderImage = data.url;
+            state.visionRenderAsset = data;
+        } else {
+            state.visionRenderImage = `data:${data.mime || 'image/png'};base64,${data.data}`;
+            state.visionRenderAsset = null;
+        }
         setVisionStatus('render', 'Visualisering klar.', false);
         renderVisionLab();
     } catch (err) {
         state.visionRenderImage = '';
+        state.visionRenderAsset = null;
         setVisionStatus('render', err.message, true);
         renderVisionLab();
     }
@@ -402,6 +423,7 @@ async function handleVisionRender() {
 async function attachRenderToListing() {
     const select = document.getElementById('vision-render-listing');
     const statusEl = document.getElementById('vision-render-link-status');
+    const noteEl = document.getElementById('vision-render-note');
     if (!select || !statusEl) return;
     if (!state.visionRenderImage) {
         statusEl.textContent = 'Generera först en bild.';
@@ -417,15 +439,21 @@ async function attachRenderToListing() {
     statusEl.textContent = 'Kopplar bilden...';
     statusEl.classList.remove('error');
     try {
-        const file = await dataURLToFile(state.visionRenderImage, `vision-${Date.now()}.png`);
-        const upload = await uploadMediaFile(file);
+        let asset = state.visionRenderAsset;
+        if (!asset || !asset.url) {
+            const file = await dataURLToFile(state.visionRenderImage, `vision-${Date.now()}.png`);
+            asset = await uploadMediaFile(file);
+        }
+        const label = noteEl?.value.trim() ? `AI: ${noteEl.value.trim()}` : 'AI-rendering';
         await attachImageToListing(listingId, {
-            url: upload.url,
-            key: upload.key,
+            url: asset.url,
+            key: asset.key,
             source: 'ai',
             kind: 'render',
+            label,
         });
         statusEl.textContent = 'Bilden kopplades till objektet.';
+        if (noteEl) noteEl.value = '';
         await fetchListings();
     } catch (err) {
         statusEl.textContent = err.message;
@@ -495,6 +523,9 @@ function buildImagePrompt(style, extra, analysis) {
         if ((analysis.notable_details || []).length) {
             parts.push(`Detaljer som ska bevaras: ${(analysis.notable_details || []).join(', ')}`);
         }
+        parts.push('Rendera exakt samma kameravinkel/perspektiv som utgångsbilden. Ändra aldrig väggarnas form, fönstrens placering, dörröppningar eller rummets proportioner.');
+        parts.push('Den enda förändringen ska vara möbler, textilier, belysning och dekor. Arkitekturen, fönster, dörrar och ljusinsläpp måste ligga kvar där de är i originalbilden.');
+        parts.push('Om instruktionen bryts (t.ex. fönster flyttas eller kameran vrids) ska du avvisa ändringen och i stället beskriva hur möblerna placeras med den exakta layouten.');
     }
     if (style) {
         parts.push(`Övergripande känsla: ${style}.`);
@@ -649,6 +680,8 @@ function processRemixFile(file) {
     }
     state.visionRemix.file = file;
     state.visionRemix.analysis = null;
+    state.visionRemix.storageURL = '';
+    state.visionRemix.storageKey = '';
     const reader = new FileReader();
     reader.onload = () => {
         state.visionRemix.previewURL = reader.result;

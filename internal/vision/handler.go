@@ -13,6 +13,7 @@ type Handler struct {
 	Analyzer Analyzer
 	Designer Designer
 	Renderer ImageGenerator
+	Imagen   ImagenClient
 }
 
 // Analyze handles POST /api/vision/analyze.
@@ -109,12 +110,14 @@ func (h Handler) Design(w http.ResponseWriter, r *http.Request) {
 
 // Render handles POST /api/vision/render by generating an illustrative image.
 func (h Handler) Render(w http.ResponseWriter, r *http.Request) {
-	if h.Renderer == nil {
+	if h.Renderer == nil && h.Imagen == nil {
 		http.Error(w, "vision rendering inactive", http.StatusServiceUnavailable)
 		return
 	}
 	var req struct {
-		Prompt string `json:"prompt"`
+		Prompt        string `json:"prompt"`
+		BaseImageURL  string `json:"base_image_url"`
+		BaseImageData string `json:"base_image_data"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -122,6 +125,19 @@ func (h Handler) Render(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.Prompt) == "" {
 		http.Error(w, "prompt is required", http.StatusBadRequest)
+		return
+	}
+	if h.Imagen != nil && (strings.TrimSpace(req.BaseImageURL) != "" || strings.TrimSpace(req.BaseImageData) != "") {
+		result, err := h.Imagen.Edit(r.Context(), ImagenPayload{
+			Prompt:        req.Prompt,
+			BaseImageURL:  strings.TrimSpace(req.BaseImageURL),
+			BaseImageData: strings.TrimSpace(req.BaseImageData),
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		writeJSON(w, result)
 		return
 	}
 	result, err := h.Renderer.Generate(r.Context(), req.Prompt)

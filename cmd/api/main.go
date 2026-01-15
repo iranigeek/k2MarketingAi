@@ -69,6 +69,7 @@ func main() {
 		visionAnalyzer vision.Analyzer
 		visionDesigner vision.Designer
 		visionRenderer vision.ImageGenerator
+		imagenRenderer vision.ImagenClient
 	)
 	switch {
 	case strings.EqualFold(cfg.AI.Provider, "gemini") && cfg.AI.Gemini.APIKey != "":
@@ -82,6 +83,20 @@ func main() {
 	default:
 		generator = generation.NewHeuristic()
 		log.Println("generator ready: heuristic fallback")
+	}
+	if cfg.AI.Imagen.Enabled && cfg.AI.Imagen.ProjectID != "" {
+		imagenRenderer = vision.NewVertexImagen(vision.VertexImagenConfig{
+			ProjectID:          cfg.AI.Imagen.ProjectID,
+			Location:           cfg.AI.Imagen.Location,
+			Model:              cfg.AI.Imagen.Model,
+			APIKey:             cfg.AI.Gemini.APIKey,
+			ServiceAccount:     cfg.AI.Imagen.ServiceAccount,
+			ServiceAccountJSON: cfg.AI.Imagen.ServiceAccountJSON,
+		}, uploader)
+	} else if cfg.AI.Imagen.Enabled {
+		log.Println("imagen renderer disabled: missing project id")
+	} else {
+		log.Println("imagen renderer disabled via config")
 	}
 
 	eventBroker := events.NewBroker()
@@ -100,6 +115,7 @@ func main() {
 		Analyzer: visionAnalyzer,
 		Designer: visionDesigner,
 		Renderer: visionRenderer,
+		Imagen:   imagenRenderer,
 	}
 	srv := server.New(cfg.Port, listingHandler, visionHandler, staticFS)
 

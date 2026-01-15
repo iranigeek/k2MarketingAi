@@ -17,14 +17,14 @@ type Config struct {
 
 // MediaConfig describes S3/media related configuration.
 type MediaConfig struct {
-	Bucket            string `json:"bucket"`
-	Region            string `json:"region"`
-	Endpoint          string `json:"endpoint"`
-	PublicURL         string `json:"public_url"`
-	KeyPrefix         string `json:"key_prefix"`
-	ForcePathStyle    bool   `json:"force_path_style"`
-	AccessKeyID       string `json:"access_key_id"`
-	SecretAccessKey   string `json:"secret_access_key"`
+	Bucket          string `json:"bucket"`
+	Region          string `json:"region"`
+	Endpoint        string `json:"endpoint"`
+	PublicURL       string `json:"public_url"`
+	KeyPrefix       string `json:"key_prefix"`
+	ForcePathStyle  bool   `json:"force_path_style"`
+	AccessKeyID     string `json:"access_key_id"`
+	SecretAccessKey string `json:"secret_access_key"`
 }
 
 // GeodataConfig bundles relevant API keys.
@@ -38,6 +38,7 @@ type GeodataConfig struct {
 type AIConfig struct {
 	Provider string       `json:"provider"`
 	Gemini   GeminiConfig `json:"gemini"`
+	Imagen   ImagenConfig `json:"imagen"`
 }
 
 // GeminiConfig holds Google Generative Language credentials.
@@ -47,6 +48,16 @@ type GeminiConfig struct {
 	VisionModel    string `json:"vision_model"`
 	ImageModel     string `json:"image_model"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+// ImagenConfig holds Vertex AI Imagen settings.
+type ImagenConfig struct {
+	Enabled            bool   `json:"enabled"`
+	ProjectID          string `json:"project_id"`
+	Location           string `json:"location"`
+	Model              string `json:"model"`
+	ServiceAccount     string `json:"service_account"`
+	ServiceAccountJSON string `json:"service_account_json"`
 }
 
 // Load reads configuration from the provided JSON file.
@@ -83,5 +94,11 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.AI.Gemini.TimeoutSeconds <= 0 {
 		cfg.AI.Gemini.TimeoutSeconds = 60
+	}
+	if cfg.AI.Imagen.Location == "" {
+		cfg.AI.Imagen.Location = "us-central1"
+	}
+	if cfg.AI.Imagen.Model == "" {
+		cfg.AI.Imagen.Model = "image-generation@006"
 	}
 }

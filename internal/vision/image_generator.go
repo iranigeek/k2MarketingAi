@@ -17,8 +17,10 @@ type ImageGenerator interface {
 
 // ImageResult represents a rendered image payload.
 type ImageResult struct {
-	Data string `json:"data"`
-	MIME string `json:"mime"`
+	Data string `json:"data,omitempty"`
+	MIME string `json:"mime,omitempty"`
+	URL  string `json:"url,omitempty"`
+	Key  string `json:"key,omitempty"`
 }
 
 // GeminiImageGenerator renders interiors via Gemini image outputs.
