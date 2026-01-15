@@ -4,8 +4,8 @@ namespace: k2marketing
 resources:
   - ../../base
 images:
-  - name: ghcr.io/your-org/k2marketing-ai
-    newName: ghcr.io/your-org/k2marketing-ai
+  - name: ghcr.io/iranigeeks/k2marketingai
+    newName: ghcr.io/iranigeeks/k2marketingai
     newTag: v0.1.0
 patches:
   - target:

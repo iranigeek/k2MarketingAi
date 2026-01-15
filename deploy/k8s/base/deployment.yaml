@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/your-org/k2marketing-ai:latest
+          image: ghcr.io/iranigeeks/k2marketingai:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
