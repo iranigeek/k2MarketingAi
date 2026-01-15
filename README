@@ -193,6 +193,16 @@ Utvecklingsläge: om nyckeln saknas faller providern tillbaka till statiska exem
 - Kodstil: standard Go-format (`go fmt ./...`).
 - Frontend: vanilla HTML/CSS/JS för enkelhet; byt gärna till React/Svelte när behovet växer.
 
+## Kubernetes & Argo CD
+
+Repo:t innehåller nu en Dockerfile samt manifest under `deploy/`. Flödet ser ut så här i korthet:
+
+1. Bygg och pusha en bild (`Dockerfile`).
+2. Skapa en `config.json` för produktion och lägg den i ett K8s-Secret (`k2marketing-config`), t.ex. `kubectl -n k2marketing create secret generic k2marketing-config --from-file=config.json=config.prod.json`.
+3. Anpassa `deploy/k8s/overlays/prod/kustomization.yaml` med rätt bildtagg/domän och applicera med `kustomize build ... | kubectl apply -f -`, eller låt Argo CD läsa `deploy/argocd/application.yaml`.
+
+Se `deploy/README.md` för mer detaljer (TLS, Argo-flöde, mm).
+
 ## Så committar du till `main`
 
 1. Kontrollera status:

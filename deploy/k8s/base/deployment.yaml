@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k2marketing-api
+  labels:
+    app: k2marketing-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: k2marketing-api
+  template:
+    metadata:
+      labels:
+        app: k2marketing-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/your-org/k2marketing-ai:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            timeoutSeconds: 3
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.json
+              subPath: config.json
+      volumes:
+        - name: config
+          secret:
+            secretName: k2marketing-config
+            items:
+              - key: config.json
+                path: config.json
