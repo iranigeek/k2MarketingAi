@@ -10,13 +10,17 @@ import (
 
 // InMemoryStore is a thread-safe store used when a database is not configured.
 type InMemoryStore struct {
-	mu       sync.RWMutex
-	listings []Listing
+	mu            sync.RWMutex
+	listings      []Listing
+	styleProfiles map[string]StyleProfile
 }
 
 // NewInMemoryStore constructs an empty in-memory store.
 func NewInMemoryStore() *InMemoryStore {
-	return &InMemoryStore{listings: make([]Listing, 0)}
+	return &InMemoryStore{
+		listings:      make([]Listing, 0),
+		styleProfiles: make(map[string]StyleProfile),
+	}
 }
 
 // CreateListing appends a listing to the in-memory slice.
@@ -150,4 +154,50 @@ func (s *InMemoryStore) UpdateStatus(_ context.Context, id string, status Status
 		}
 	}
 	return ErrNotFound
+}
+
+// SaveStyleProfile stores or updates a style profile in memory.
+func (s *InMemoryStore) SaveStyleProfile(_ context.Context, profile StyleProfile) (StyleProfile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	if profile.ID == "" {
+		profile.ID = uuid.NewString()
+		profile.CreatedAt = now
+	} else if existing, ok := s.styleProfiles[profile.ID]; ok {
+		if profile.CreatedAt.IsZero() {
+			profile.CreatedAt = existing.CreatedAt
+		}
+	}
+	if profile.CreatedAt.IsZero() {
+		profile.CreatedAt = now
+	}
+	profile.UpdatedAt = now
+	s.styleProfiles[profile.ID] = profile
+	return profile, nil
+}
+
+// ListStyleProfiles returns all profiles.
+func (s *InMemoryStore) ListStyleProfiles(_ context.Context) ([]StyleProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	profiles := make([]StyleProfile, 0, len(s.styleProfiles))
+	for _, profile := range s.styleProfiles {
+		profiles = append(profiles, profile)
+	}
+	return profiles, nil
+}
+
+// GetStyleProfile returns a profile by ID.
+func (s *InMemoryStore) GetStyleProfile(_ context.Context, id string) (StyleProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	profile, ok := s.styleProfiles[id]
+	if !ok {
+		return StyleProfile{}, ErrNotFound
+	}
+	return profile, nil
 }

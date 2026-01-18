@@ -14,30 +14,31 @@ var ErrNotFound = errors.New("listing not found")
 
 // Listing represents the metadata and generated insights for a real estate listing.
 type Listing struct {
-	ID             string    `json:"id"`
-	Address        string    `json:"address"`
-	Neighborhood   string    `json:"neighborhood,omitempty"`
-	City           string    `json:"city,omitempty"`
-	PropertyType   string    `json:"property_type,omitempty"`
-	Condition      string    `json:"condition,omitempty"`
-	Balcony        bool      `json:"balcony,omitempty"`
-	Floor          string    `json:"floor,omitempty"`
-	Association    string    `json:"association,omitempty"`
-	Length         string    `json:"length,omitempty"`
-	Tone           string    `json:"tone"`
-	TargetAudience string    `json:"target_audience"`
-	Highlights     []string  `json:"highlights"`
-	ImageURL       string    `json:"image_url,omitempty"`
-	Fee            int       `json:"fee,omitempty"`
-	LivingArea     float64   `json:"living_area,omitempty"`
-	Rooms          float64   `json:"rooms,omitempty"`
-	Sections       []Section `json:"sections,omitempty"`
-	FullCopy       string    `json:"full_copy,omitempty"`
-	History        History   `json:"section_history,omitempty"`
-	Status         Status    `json:"status,omitempty"`
-	Insights       Insights  `json:"insights,omitempty"`
-	Details        Details   `json:"details,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             string        `json:"id"`
+	Address        string        `json:"address"`
+	Neighborhood   string        `json:"neighborhood,omitempty"`
+	City           string        `json:"city,omitempty"`
+	PropertyType   string        `json:"property_type,omitempty"`
+	Condition      string        `json:"condition,omitempty"`
+	Balcony        bool          `json:"balcony,omitempty"`
+	Floor          string        `json:"floor,omitempty"`
+	Association    string        `json:"association,omitempty"`
+	Length         string        `json:"length,omitempty"`
+	Tone           string        `json:"tone"`
+	TargetAudience string        `json:"target_audience"`
+	Highlights     []string      `json:"highlights"`
+	ImageURL       string        `json:"image_url,omitempty"`
+	Fee            int           `json:"fee,omitempty"`
+	LivingArea     float64       `json:"living_area,omitempty"`
+	Rooms          float64       `json:"rooms,omitempty"`
+	Sections       []Section     `json:"sections,omitempty"`
+	FullCopy       string        `json:"full_copy,omitempty"`
+	History        History       `json:"section_history,omitempty"`
+	Status         Status        `json:"status,omitempty"`
+	Insights       Insights      `json:"insights,omitempty"`
+	Details        Details       `json:"details,omitempty"`
+	StyleProfile   *StyleProfile `json:"style_profile,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
 }
 
 // Section represents an editable block of text in the listing description.
@@ -104,6 +105,7 @@ type MetaInfo struct {
 	Tone             string `json:"tone"`
 	TargetAudience   string `json:"target_audience"`
 	LanguageVariant  string `json:"language_variant"`
+	StyleProfileID   string `json:"style_profile_id"`
 }
 
 // PropertyInfo stores property-level facts.
@@ -202,6 +204,19 @@ type TransitInfo struct {
 	Description string `json:"description"`
 }
 
+// StyleProfile describes a stored tone-of-voice with sample texts.
+type StyleProfile struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Tone           string    `json:"tone"`
+	Guidelines     string    `json:"guidelines"`
+	ExampleTexts   []string  `json:"example_texts"`
+	ForbiddenWords []string  `json:"forbidden_words"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 // Store defines the persistence behaviors the application relies on.
 type Store interface {
 	CreateListing(ctx context.Context, input Listing) (Listing, error)
@@ -212,6 +227,9 @@ type Store interface {
 	UpdateInsights(ctx context.Context, id string, insights Insights, status Status) (Listing, error)
 	UpdateStatus(ctx context.Context, id string, status Status) error
 	DeleteListing(ctx context.Context, id string) error
+	SaveStyleProfile(ctx context.Context, profile StyleProfile) (StyleProfile, error)
+	ListStyleProfiles(ctx context.Context) ([]StyleProfile, error)
+	GetStyleProfile(ctx context.Context, id string) (StyleProfile, error)
 	Close()
 }
 
@@ -294,6 +312,20 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			return fmt.Errorf("alter listings table: %w", err)
 		}
+	}
+
+	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS style_profiles (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		description TEXT,
+		tone TEXT,
+		guidelines TEXT,
+		example_texts TEXT[],
+		forbidden_words TEXT[],
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`); err != nil {
+		return fmt.Errorf("create style_profiles table: %w", err)
 	}
 
 	return nil

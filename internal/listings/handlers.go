@@ -58,6 +58,7 @@ type CreateListingRequest struct {
 	Instructions   string               `json:"instructions"`
 	Sections       []SectionInput       `json:"sections"`
 	Images         []storage.ImageAsset `json:"images"`
+	StyleProfileID string               `json:"style_profile_id"`
 }
 
 // SectionInput allows custom section configuration from the client.
@@ -165,8 +166,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Insights:       storage.Insights{},
 		CreatedAt:      time.Now(),
 	}
+	listing.Details.Meta.StyleProfileID = strings.TrimSpace(req.StyleProfileID)
 	applyImagesToListing(&listing, req.Images)
 	hydrateDetailsFromLegacy(&listing)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&listing})
 
 	if h.GeoProvider != nil {
 		searchAddress := combineAddressCity(req.Address, req.City)
@@ -204,6 +207,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&listing})
 	h.publishListing(listing)
 	go h.runPipeline(listing)
 
@@ -220,9 +224,12 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pointers := make([]*storage.Listing, len(listings))
 	for i := range listings {
 		hydrateDetailsFromLegacy(&listings[i])
+		pointers[i] = &listings[i]
 	}
+	h.attachStyleProfiles(r.Context(), pointers)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(listings)
@@ -247,6 +254,7 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hydrateDetailsFromLegacy(&listing)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&listing})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(listing)
 }
@@ -278,7 +286,12 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&listing})
 	idx := findSectionIndex(listing.Sections, slug)
+	if idx == -1 && slug == "main" && len(listing.Sections) > 0 {
+		idx = 0
+		slug = normalizeSlug(listing.Sections[idx].Slug)
+	}
 	if idx == -1 {
 		http.Error(w, "section not found", http.StatusNotFound)
 		return
@@ -322,6 +335,7 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Generator-Fallback", "1")
 	}
 	hydrateDetailsFromLegacy(&updated)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&updated})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updated)
 	h.publishListing(updated)
@@ -362,6 +376,9 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idx := findSectionIndex(listing.Sections, slug)
+	if idx == -1 && slug == "main" && len(listing.Sections) > 0 {
+		idx = 0
+	}
 	if idx == -1 {
 		newSection := storage.Section{
 			Slug:    slug,
@@ -396,6 +413,7 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hydrateDetailsFromLegacy(&updated)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&updated})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updated)
 	h.publishListing(updated)
@@ -421,6 +439,9 @@ func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idx := findSectionIndex(listing.Sections, slug)
+	if idx == -1 && slug == "main" && len(listing.Sections) > 0 {
+		idx = 0
+	}
 	if idx == -1 {
 		http.Error(w, "section not found", http.StatusNotFound)
 		return
@@ -443,6 +464,8 @@ func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hydrateDetailsFromLegacy(&updated)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&updated})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updated)
 	h.publishListing(updated)
@@ -635,6 +658,7 @@ func (h Handler) AttachImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hydrateDetailsFromLegacy(&updated)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&updated})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updated)
 	h.publishListing(updated)
@@ -678,6 +702,60 @@ func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListStyleProfiles returns all stored style profiles.
+func (h Handler) ListStyleProfiles(w http.ResponseWriter, r *http.Request) {
+	profiles, err := h.Store.ListStyleProfiles(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(profiles)
+}
+
+// SaveStyleProfile creates or updates a style profile.
+func (h Handler) SaveStyleProfile(w http.ResponseWriter, r *http.Request) {
+	var payload storage.StyleProfile
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	payload.Name = strings.TrimSpace(payload.Name)
+	payload.Description = strings.TrimSpace(payload.Description)
+	payload.Tone = strings.TrimSpace(payload.Tone)
+	payload.Guidelines = strings.TrimSpace(payload.Guidelines)
+	payload.ExampleTexts = normalizeList(payload.ExampleTexts)
+	payload.ForbiddenWords = normalizeList(payload.ForbiddenWords)
+
+	if payload.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if len(payload.ExampleTexts) == 0 {
+		http.Error(w, "at least one example_texts entry is required", http.StatusBadRequest)
+		return
+	}
+
+	profile, err := h.Store.SaveStyleProfile(r.Context(), payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(profile)
+}
+
+func normalizeList(values []string) []string {
+	var result []string
+	for _, v := range values {
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
 func parseMultipartRequest(r *http.Request) (CreateListingRequest, *uploadPayload, error) {
 	const maxFormMemory = maxImageBytes + (1 << 20)
 	if err := r.ParseMultipartForm(maxFormMemory); err != nil {
@@ -690,6 +768,7 @@ func parseMultipartRequest(r *http.Request) (CreateListingRequest, *uploadPayloa
 		TargetAudience: strings.TrimSpace(r.FormValue("target_audience")),
 		ImageURL:       strings.TrimSpace(r.FormValue("image_url")),
 		Instructions:   strings.TrimSpace(r.FormValue("instructions")),
+		StyleProfileID: strings.TrimSpace(r.FormValue("style_profile_id")),
 	}
 
 	if sectionsRaw := strings.TrimSpace(r.FormValue("sections")); sectionsRaw != "" {
@@ -1016,6 +1095,36 @@ func composeFullCopy(sections []storage.Section) string {
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func (h Handler) attachStyleProfiles(ctx context.Context, listings []*storage.Listing) {
+	if h.Store == nil {
+		return
+	}
+	cache := make(map[string]*storage.StyleProfile)
+	for _, item := range listings {
+		if item == nil {
+			continue
+		}
+		styleID := strings.TrimSpace(item.Details.Meta.StyleProfileID)
+		if styleID == "" {
+			item.StyleProfile = nil
+			continue
+		}
+		if cached, ok := cache[styleID]; ok {
+			item.StyleProfile = cached
+			continue
+		}
+		profile, err := h.Store.GetStyleProfile(ctx, styleID)
+		if err != nil {
+			if !errors.Is(err, storage.ErrNotFound) {
+				log.Printf("style profile fetch failed: %v", err)
+			}
+			continue
+		}
+		cache[styleID] = &profile
+		item.StyleProfile = &profile
+	}
 }
 
 func recordHistoryForAll(listing *storage.Listing, source string, ctx historyContext) {

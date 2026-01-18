@@ -147,6 +147,10 @@ Historik per sektion (`section_history`) sparas automatiskt (max 5 versioner) va
 
 > Promptmotorn för Gemini är uppstyrd med tydliga sektioninstruktioner och exempelstil, så att texterna följer professionell mäklar-copy snarare än generiska utsagor.
 
+## Stilprofiler per kund
+
+Under fliken **Inställningar** kan du nu spara stilprofiler per kund/inloggning. Lägg in namn, riktlinjer och 2–3 favorittexter – backend sparar dem via `/api/style-profiles/` och varje objekt kan kopplas till en profil via dropdownen i annonsgeneratorn. När en profil är vald skickas exemplen som few-shot-promptar till Gemini (även vid omskrivningar), vilket gör att texten efterliknar kundens språk och undviker förbjudna ord. Profilen returneras dessutom som `style_profile` i varje listing-respons så UI:t alltid vet vilken ton som används.
+
 Generering sker via Google Gemini (Generative Language API) när `config.json` innehåller:
 
 ```json

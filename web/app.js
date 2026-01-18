@@ -6,6 +6,8 @@ const state = {
     lastText: '',
     uploads: [],
     listingFilter: '',
+    styleProfiles: [],
+    selectedProfileId: '',
     visionAnalysis: null,
     visionDesign: null,
     visionRemix: {
@@ -66,6 +68,18 @@ async function fetchListings() {
     }
 }
 
+async function fetchStyleProfiles() {
+    try {
+        const res = await fetch('/api/style-profiles/');
+        if (!res.ok) throw new Error('Kunde inte hämta stilprofiler');
+        state.styleProfiles = await res.json();
+        renderStyleProfileOptions();
+        renderStyleProfileList();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
 function buildPayloadFromForm() {
     const highlights = listFromLines(value('highlights'));
     const images = state.uploads
@@ -78,7 +92,7 @@ function buildPayloadFromForm() {
             kind: file.kind || 'photo',
             cover: index === 0,
         }));
-    return {
+    const payload = {
         address: value('address'),
         neighborhood: value('neighborhood'),
         city: value('city'),
@@ -91,11 +105,14 @@ function buildPayloadFromForm() {
         balcony: document.getElementById('balcony').checked,
         tone: document.getElementById('tone').value,
         length: document.getElementById('length').value,
+        style_profile_id: document.getElementById('style-profile').value || '',
         highlights,
         target_audience: 'Bred målgrupp',
         fee: 0,
         images,
     };
+    state.selectedProfileId = payload.style_profile_id || '';
+    return payload;
 }
 
 async function handleCreate(e) {
@@ -729,7 +746,8 @@ async function applySelectionRewrite(mode) {
     const instruction = instructionForMode(mode, state.current.tone);
     setAIStatus(`Omskriver: ${instruction}`, true);
     try {
-        const res = await fetch(`/api/listings/${state.selectedId}/sections/main/rewrite`, {
+        const targetSlug = getPrimarySectionSlug();
+        const res = await fetch(`/api/listings/${state.selectedId}/sections/${targetSlug}/rewrite`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instruction, selection: selected }),
@@ -770,6 +788,28 @@ function instructionForMode(mode, tone) {
 async function regenerateWithTone() {
     if (!state.current) return;
     await applySelectionRewrite('rewrite');
+}
+
+function normalizeSlug(value) {
+    let slug = (value || '').toString().trim().toLowerCase();
+    if (!slug) return '';
+    slug = slug.replace(/^\/+|\/+$/g, '');
+    slug = slug.replace(/_/g, '-');
+    slug = slug
+        .split(/[\s]+/)
+        .filter(Boolean)
+        .join('-');
+    slug = slug.replace(/^-+|-+$/g, '');
+    return slug;
+}
+
+function getPrimarySectionSlug() {
+    const sections = state.current?.sections || [];
+    for (const section of sections) {
+        const slug = normalizeSlug(section.slug || section.title);
+        if (slug) return slug;
+    }
+    return 'main';
 }
 
 function bindEvents() {
@@ -839,6 +879,20 @@ function bindEvents() {
         state.versions = [];
         renderVersions();
     });
+    const profileForm = document.getElementById('profile-form');
+    if (profileForm) {
+        profileForm.addEventListener('submit', handleProfileFormSubmit);
+    }
+    const profileReset = document.getElementById('profile-reset');
+    if (profileReset) {
+        profileReset.addEventListener('click', resetProfileForm);
+    }
+    const styleSelect = document.getElementById('style-profile');
+    if (styleSelect) {
+        styleSelect.addEventListener('change', () => {
+            state.selectedProfileId = styleSelect.value || '';
+        });
+    }
 
     const sidebarToggle = document.getElementById('sidebar-toggle');
     if (sidebarToggle) {
@@ -1100,6 +1154,11 @@ function populateFormFromListing(listing) {
     setValue('balcony', listing.balcony);
     setValue('tone', listing.tone || 'Neutral');
     setValue('length', listing.length || 'normal');
+    setValue('style-profile', listing.details?.meta?.style_profile_id || '');
+    const styleSelect = document.getElementById('style-profile');
+    if (styleSelect) {
+        state.selectedProfileId = styleSelect.value || '';
+    }
 
     if (Array.isArray(listing.highlights)) {
         setValue('highlights', listing.highlights.join(', '));
@@ -1109,6 +1168,156 @@ function populateFormFromListing(listing) {
         setValue('highlights', '');
     }
     toggleFloorField();
+}
+
+function renderStyleProfileOptions() {
+    const select = document.getElementById('style-profile');
+    if (!select) return;
+    const previous = select.value || state.selectedProfileId || '';
+    select.innerHTML = '<option value="">Standard (ingen sparad ton)</option>';
+    state.styleProfiles.forEach(profile => {
+        const option = document.createElement('option');
+        option.value = profile.id;
+        option.textContent = profile.name;
+        select.appendChild(option);
+    });
+    if (previous && state.styleProfiles.some(profile => profile.id === previous)) {
+        select.value = previous;
+    } else {
+        select.value = '';
+    }
+    state.selectedProfileId = select.value || '';
+}
+
+function renderStyleProfileList() {
+    const container = document.getElementById('profile-list');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!state.styleProfiles.length) {
+        container.innerHTML = '<p class="muted">Inga sparade stilprofiler ännu.</p>';
+        return;
+    }
+    state.styleProfiles.forEach(profile => {
+        const card = document.createElement('div');
+        card.className = 'profile-card';
+        const header = document.createElement('div');
+        header.className = 'profile-card__header';
+        header.innerHTML = `<strong>${profile.name}</strong><span class="muted">${profile.tone || 'Okänd ton'}</span>`;
+        const desc = document.createElement('p');
+        desc.className = 'profile-card__desc muted';
+        desc.textContent = profile.description || 'Ingen beskrivning.';
+        const examples = document.createElement('p');
+        examples.className = 'profile-card__examples';
+        const examplePreview = (profile.example_texts || []).slice(0, 2).join(' • ');
+        examples.textContent = examplePreview ? `Exempel: ${examplePreview}` : 'Inga exempel tillagda.';
+        const actions = document.createElement('div');
+        actions.className = 'profile-card__actions';
+        const useBtn = document.createElement('button');
+        useBtn.type = 'button';
+        useBtn.className = 'secondary';
+        useBtn.textContent = 'Använd i generatorn';
+        useBtn.addEventListener('click', () => selectProfileForForm(profile.id));
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'ghost';
+        editBtn.textContent = 'Redigera';
+        editBtn.addEventListener('click', () => fillProfileForm(profile));
+        actions.appendChild(useBtn);
+        actions.appendChild(editBtn);
+        card.appendChild(header);
+        card.appendChild(desc);
+        card.appendChild(examples);
+        if (profile.guidelines) {
+            const guidelines = document.createElement('p');
+            guidelines.className = 'profile-card__examples';
+            guidelines.textContent = `Riktlinjer: ${profile.guidelines}`;
+            card.appendChild(guidelines);
+        }
+        if (profile.forbidden_words && profile.forbidden_words.length) {
+            const forbid = document.createElement('p');
+            forbid.className = 'profile-card__examples';
+            forbid.textContent = `Undvik: ${profile.forbidden_words.join(', ')}`;
+            card.appendChild(forbid);
+        }
+        card.appendChild(actions);
+        container.appendChild(card);
+    });
+}
+
+function fillProfileForm(profile) {
+    if (!profile) return;
+    document.getElementById('profile-id').value = profile.id || '';
+    document.getElementById('profile-name').value = profile.name || '';
+    document.getElementById('profile-tone').value = profile.tone || '';
+    document.getElementById('profile-description').value = profile.description || '';
+    document.getElementById('profile-guidelines').value = profile.guidelines || '';
+    document.getElementById('profile-examples').value = (profile.example_texts || []).join('\n');
+    document.getElementById('profile-forbidden').value = (profile.forbidden_words || []).join('\n');
+    setProfileStatus(`Redigerar ${profile.name}`, false);
+    window.scrollTo({ top: document.getElementById('profile-form').offsetTop - 40, behavior: 'smooth' });
+}
+
+function resetProfileForm() {
+    document.getElementById('profile-id').value = '';
+    document.getElementById('profile-name').value = '';
+    document.getElementById('profile-tone').value = '';
+    document.getElementById('profile-description').value = '';
+    document.getElementById('profile-guidelines').value = '';
+    document.getElementById('profile-examples').value = '';
+    document.getElementById('profile-forbidden').value = '';
+    setProfileStatus('', false);
+}
+
+function setProfileStatus(message, isError) {
+    const el = document.getElementById('profile-status');
+    if (!el) return;
+    el.textContent = message || '';
+    el.style.color = isError ? '#b42318' : 'var(--muted)';
+}
+
+async function handleProfileFormSubmit(event) {
+    event.preventDefault();
+    const payload = {
+        id: document.getElementById('profile-id').value.trim(),
+        name: document.getElementById('profile-name').value.trim(),
+        tone: document.getElementById('profile-tone').value.trim(),
+        description: document.getElementById('profile-description').value.trim(),
+        guidelines: document.getElementById('profile-guidelines').value.trim(),
+        example_texts: listFromLines(document.getElementById('profile-examples').value || ''),
+        forbidden_words: listFromLines(document.getElementById('profile-forbidden').value || ''),
+    };
+    if (!payload.name) {
+        setProfileStatus('Namn krävs.', true);
+        return;
+    }
+    if (!payload.example_texts.length) {
+        setProfileStatus('Lägg till minst ett exempel.', true);
+        return;
+    }
+    try {
+        const res = await fetch('/api/style-profiles/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Kunde inte spara stilprofil');
+        }
+        await fetchStyleProfiles();
+        resetProfileForm();
+        setProfileStatus('Sparad!', false);
+    } catch (err) {
+        setProfileStatus(err.message, true);
+    }
+}
+
+function selectProfileForForm(id) {
+    const select = document.getElementById('style-profile');
+    if (!select) return;
+    select.value = id || '';
+    state.selectedProfileId = select.value || '';
+    setProfileStatus(id ? 'Profil vald i generatorn.' : '', false);
 }
 
 function resetGeneratorForm() {
@@ -1134,6 +1343,10 @@ function resetGeneratorForm() {
     renderUploads();
     setAIStatus('', false);
     toggleFloorField();
+    const styleSelect = document.getElementById('style-profile');
+    if (styleSelect) {
+        styleSelect.value = state.selectedProfileId || '';
+    }
 }
 
 function capitalize(value) {
@@ -1444,7 +1657,12 @@ function updateImageStats() {
 bindEvents();
 renderVisionLab();
 showView('objects');
-fetchListings();
+initApp();
+
+async function initApp() {
+    await fetchStyleProfiles();
+    await fetchListings();
+}
 
 async function deleteListing(id) {
     if (!id) return;

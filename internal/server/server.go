@@ -45,6 +45,10 @@ func New(port string, listingHandler listings.Handler, visionHandler vision.Hand
 				r.Delete("/", listingHandler.DeleteListing)
 			})
 		})
+		r.Route("/style-profiles", func(r chi.Router) {
+			r.Get("/", listingHandler.ListStyleProfiles)
+			r.Post("/", listingHandler.SaveStyleProfile)
+		})
 		r.Get("/events", listingHandler.StreamEvents)
 		r.Route("/vision", func(r chi.Router) {
 			r.Post("/analyze", visionHandler.Analyze)

@@ -362,7 +362,7 @@ func (g *llmGenerator) Generate(ctx context.Context, listing storage.Listing) (R
 		},
 	})
 
-	systemPrompt := "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta."
+	systemPrompt := "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta. Om kunden har en stilprofil måste du följa den strikt."
 	userPrompt := fmt.Sprintf(`Returnera JSON {"sections":[{"slug":"","title":"","content":"","highlights":["..."]}, ...]}.
 Krav:
 - Skapa sektioner enligt "sections" i datan (intro, hall, kök, vardagsrum, sovrum/bad, område, avslutning).
@@ -372,6 +372,9 @@ Krav:
 - Respektera ton, målgrupp och detaljer i datan. Om något saknas: skriv professionellt och generellt utan att hitta på.
 Data:
 %s`, string(payload))
+	if profile := styleProfilePrompt(listing.StyleProfile); profile != "" {
+		userPrompt = fmt.Sprintf("%s\n\n%s", userPrompt, profile)
+	}
 
 	content, err := g.client.ChatCompletion(ctx, []llm.ChatMessage{
 		{Role: "system", Content: systemPrompt},
@@ -397,17 +400,26 @@ func (g *llmGenerator) Rewrite(ctx context.Context, listing storage.Listing, sec
 		guideline = "Håll samma struktur men förbättra språk och tydlighet."
 	}
 
+	originalWords := countWords(section.Content)
 	systemPrompt := `Du är en skicklig svensk copywriter. Polera text för en given sektion i en bostadsannons.
-- 2–3 meningar, inga överdrifter eller klyschor.
+- Undvik klyschor och överdrifter.
 - Behåll fakta men gör texten mer målande och säljande.
+- Matcha ursprunglig längd (minst 85 % av originalet) eller gör den något längre.
+- Följ kundens stilprofil om den finns.
 - Returnera JSON {"title":"...","content":"..."}.
 `
 	userPrompt := fmt.Sprintf(`Sektion: %s (%s)
 Originaltext: """%s"""
+Originalets längd: %d ord (matcha denna längd, ±15%%)
 Mäklarens instruktion: "%s"
 Sektionens syfte: %s
 Geodata: %s
-`, section.Title, section.Slug, section.Content, instruction, guideline, joinGeoInsights(listing.Insights.Geodata))
+`, section.Title, section.Slug, section.Content, originalWords, instruction, guideline, joinGeoInsights(listing.Insights.Geodata))
+	if profile := styleProfilePrompt(listing.StyleProfile); profile != "" {
+		userPrompt = fmt.Sprintf(`%s
+
+%s`, userPrompt, profile)
+	}
 
 	content, err := g.client.ChatCompletion(ctx, []llm.ChatMessage{
 		{Role: "system", Content: systemPrompt},
@@ -601,4 +613,38 @@ func joinGeoInsights(geo storage.GeodataInsights) string {
 	}
 
 	return strings.Join(parts, " | ")
+}
+
+func countWords(text string) int {
+	fields := strings.Fields(text)
+	return len(fields)
+}
+
+func styleProfilePrompt(profile *storage.StyleProfile) string {
+	if profile == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Kundens stilprofil \"%s\":", profile.Name)
+	if profile.Description != "" {
+		fmt.Fprintf(&b, "\n- Beskrivning: %s", profile.Description)
+	}
+	if profile.Tone != "" {
+		fmt.Fprintf(&b, "\n- Önskad ton: %s", profile.Tone)
+	}
+	if profile.Guidelines != "" {
+		fmt.Fprintf(&b, "\n- Riktlinjer: %s", profile.Guidelines)
+	}
+	if len(profile.ExampleTexts) > 0 {
+		fmt.Fprintf(&b, "\n- Förebilder (imitera rytm/ordval):")
+		for i, ex := range profile.ExampleTexts {
+			if trimmed := strings.TrimSpace(ex); trimmed != "" {
+				fmt.Fprintf(&b, "\n  %d) %s", i+1, trimmed)
+			}
+		}
+	}
+	if len(profile.ForbiddenWords) > 0 {
+		fmt.Fprintf(&b, "\n- Undvik orden: %s", strings.Join(profile.ForbiddenWords, ", "))
+	}
+	return b.String()
 }

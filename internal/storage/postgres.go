@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -194,6 +195,70 @@ func (s *PostgresStore) UpdateStatus(ctx context.Context, id string, status Stat
 	return nil
 }
 
+// SaveStyleProfile creates or updates a style profile.
+func (s *PostgresStore) SaveStyleProfile(ctx context.Context, profile StyleProfile) (StyleProfile, error) {
+	now := time.Now()
+	if profile.ID == "" {
+		profile.ID = uuid.NewString()
+		profile.CreatedAt = now
+	}
+	profile.UpdatedAt = now
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO style_profiles (id, name, description, tone, guidelines, example_texts, forbidden_words, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, now()), $9)
+		ON CONFLICT (id) DO UPDATE SET
+			name=EXCLUDED.name,
+			description=EXCLUDED.description,
+			tone=EXCLUDED.tone,
+			guidelines=EXCLUDED.guidelines,
+			example_texts=EXCLUDED.example_texts,
+			forbidden_words=EXCLUDED.forbidden_words,
+			updated_at=EXCLUDED.updated_at
+	`, profile.ID, profile.Name, profile.Description, profile.Tone, profile.Guidelines, profile.ExampleTexts, profile.ForbiddenWords, nullableTime(profile.CreatedAt), profile.UpdatedAt); err != nil {
+		return StyleProfile{}, fmt.Errorf("save style profile: %w", err)
+	}
+	return s.GetStyleProfile(ctx, profile.ID)
+}
+
+func nullableTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
+// ListStyleProfiles returns all stored style profiles.
+func (s *PostgresStore) ListStyleProfiles(ctx context.Context) ([]StyleProfile, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, created_at, updated_at FROM style_profiles ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("list style profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []StyleProfile
+	for rows.Next() {
+		profile, err := scanStyleProfile(rows)
+		if err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, profile)
+	}
+	return profiles, nil
+}
+
+// GetStyleProfile fetches a profile by ID.
+func (s *PostgresStore) GetStyleProfile(ctx context.Context, id string) (StyleProfile, error) {
+	row := s.pool.QueryRow(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, created_at, updated_at FROM style_profiles WHERE id=$1`, id)
+	profile, err := scanStyleProfile(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return StyleProfile{}, ErrNotFound
+		}
+		return StyleProfile{}, err
+	}
+	return profile, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -256,4 +321,12 @@ func scanListing(row rowScanner) (Listing, error) {
 		}
 	}
 	return item, nil
+}
+
+func scanStyleProfile(row rowScanner) (StyleProfile, error) {
+	var profile StyleProfile
+	if err := row.Scan(&profile.ID, &profile.Name, &profile.Description, &profile.Tone, &profile.Guidelines, &profile.ExampleTexts, &profile.ForbiddenWords, &profile.CreatedAt, &profile.UpdatedAt); err != nil {
+		return StyleProfile{}, fmt.Errorf("scan style profile: %w", err)
+	}
+	return profile, nil
 }
