@@ -151,6 +151,16 @@ Historik per sektion (`section_history`) sparas automatiskt (max 5 versioner) va
 
 Under fliken **Inställningar** kan du nu spara stilprofiler per kund/inloggning. Lägg in namn, riktlinjer och 2–3 favorittexter – backend sparar dem via `/api/style-profiles/` och varje objekt kan kopplas till en profil via dropdownen i annonsgeneratorn. När en profil är vald skickas exemplen som few-shot-promptar till Gemini (även vid omskrivningar), vilket gör att texten efterliknar kundens språk och undviker förbjudna ord. Profilen returneras dessutom som `style_profile` i varje listing-respons så UI:t alltid vet vilken ton som används.
 
+Utöver grundfälten kan varje profil innehålla metadata för finetuning:
+
+| Fält | Beskrivning |
+| --- | --- |
+| `custom_model` | Namnet på den finetunade modellen som ska användas för kunden (t.ex. `tunedModels/k2-maklare-1`). När fältet är satt använder backenden alltid den modellen i stället för globala `ai.gemini.model`. |
+| `dataset_uri` | Pekar på var träningsunderlaget ligger (Cloud Storage, S3, Git osv.). Bara för referens/loggning. |
+| `last_trained_at` | Senaste datum då en träning kördes (sätts av ditt eget verktyg/CI-flöde). |
+
+Ett kontor kan därmed ha en egen modell som alltid returnerar samma ton, samtidigt som andra kontor fortsätter att köra på standardmodellen.
+
 Generering sker via Google Gemini (Generative Language API) när `config.json` innehåller:
 
 ```json
@@ -184,6 +194,39 @@ Geodata hämtas via Google Geocoding + Places. Lägg nyckeln i `config.json`:
 | `geodata.google_places_api_key` | API-nyckel för Geocoding + Places |
 | `geodata.trafiklab_api_key` | Nyckel för Trafiklab/Resrobot |
 | `geodata.cache_ttl_minutes` | (Valfri) cache-TTL för Places-resultat, default 30 |
+
+## Exportera träningsdata & finetuna egna modeller
+
+Vill du ha en helt konsekvent ton bygger du ett dataset av riktiga objekt och finetunar en modell. Repo:t innehåller ett litet CLI (`cmd/dataset`) som läser från PostgreSQL och skriver JSONL med samma prompt som används i produktion.
+
+1. Se till att `config.json` pekar på den Postgres-instans där dina listings ligger (`database_url` får inte vara tom).
+2. Kör exporten:
+   ```bash
+   go run ./cmd/dataset \
+     -config config.json \
+     -out datasets/k2.jsonl \
+     -style-profile <profil-id> \
+     -min-sections 3 \
+     -min-words 150
+   ```
+   `-style-profile` är valfri; utan den exporteras alla listings. Den färdiga filen innehåller `input_text` (system+user prompt) och `output_text` (full annonstext) per rad – precis det som behövs för Vertex AI, OpenAI eller en egen LoRA-träning.
+3. Ladda upp filen till ditt moln och kör finetune-flödet. När modellen är klar sparar du dess namn i stilprofilens `custom_model` och (valfritt) datasetets plats i `dataset_uri`. Ange gärna `last_trained_at` så att teamet ser när modellen senast uppdaterades.
+4. Koppla listings till profilen. Backenden routar nu automatiskt alla genereringar/omskrivningar mot kundens modell, samtidigt som övriga kunder fortsätter använda standardmodellen.
+
+Har du annonser i ett Word-dokument? Lägg filen i repo:t och kör docx-importern som skapar samma JSONL-format utan att gå via databasen:
+
+```bash
+go run ./cmd/docximport \
+  -docx "annonser ex.docx" \
+  -out datasets/manual.jsonl \
+  -style-profile-id stilprofil-id \
+  -style-profile-name "Generell ton" \
+  -tone "premium men varm"
+```
+
+Verktyget läser varje textblock, gör ett kort faktaunderlag och parar ihop det med originaltexten. JSONL-filen används sedan precis som exporten ovan – mata in den i ditt finetune-jobb och skriv tillbaka modellnamnet i stilprofilens `custom_model`.
+
+Tips: Bygg först en "grundmodell" som tränas på hela databasen och skapa sedan kundspecifika modeller genom att exportera endast deras listings (`-style-profile`). På så sätt får du både en konsekvent baseline och möjlighet till individuell tonalitet.
 
 Utvecklingsläge: om nyckeln saknas faller providern tillbaka till statiska exempel.
 

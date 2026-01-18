@@ -206,21 +206,25 @@ type TransitInfo struct {
 
 // StyleProfile describes a stored tone-of-voice with sample texts.
 type StyleProfile struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	Description    string    `json:"description"`
-	Tone           string    `json:"tone"`
-	Guidelines     string    `json:"guidelines"`
-	ExampleTexts   []string  `json:"example_texts"`
-	ForbiddenWords []string  `json:"forbidden_words"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	Tone           string     `json:"tone"`
+	Guidelines     string     `json:"guidelines"`
+	ExampleTexts   []string   `json:"example_texts"`
+	ForbiddenWords []string   `json:"forbidden_words"`
+	CustomModel    string     `json:"custom_model"`
+	DatasetURI     string     `json:"dataset_uri"`
+	LastTrainedAt  *time.Time `json:"last_trained_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // Store defines the persistence behaviors the application relies on.
 type Store interface {
 	CreateListing(ctx context.Context, input Listing) (Listing, error)
 	ListListings(ctx context.Context) ([]Listing, error)
+	ListAllListings(ctx context.Context) ([]Listing, error)
 	GetListing(ctx context.Context, id string) (Listing, error)
 	UpdateListingSections(ctx context.Context, id string, sections []Section, fullCopy string, history History, status Status) (Listing, error)
 	UpdateListingDetails(ctx context.Context, id string, details Details, imageURL string) (Listing, error)
@@ -322,10 +326,22 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		guidelines TEXT,
 		example_texts TEXT[],
 		forbidden_words TEXT[],
+		custom_model TEXT,
+		dataset_uri TEXT,
+		last_trained_at TIMESTAMPTZ,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`); err != nil {
 		return fmt.Errorf("create style_profiles table: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE style_profiles ADD COLUMN IF NOT EXISTS custom_model TEXT`); err != nil {
+		return fmt.Errorf("alter style_profiles custom_model: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE style_profiles ADD COLUMN IF NOT EXISTS dataset_uri TEXT`); err != nil {
+		return fmt.Errorf("alter style_profiles dataset_uri: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE style_profiles ADD COLUMN IF NOT EXISTS last_trained_at TIMESTAMPTZ`); err != nil {
+		return fmt.Errorf("alter style_profiles last_trained_at: %w", err)
 	}
 
 	return nil

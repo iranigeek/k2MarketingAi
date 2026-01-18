@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"k2MarketingAi/internal/llm"
+	"k2MarketingAi/internal/prompts"
 	"k2MarketingAi/internal/storage"
 )
 
@@ -290,11 +291,6 @@ type llmGenerator struct {
 	client llm.Client
 }
 
-type structuredSectionReq struct {
-	Slug  string `json:"slug"`
-	Title string `json:"title"`
-}
-
 var sectionGuidelines = map[string]string{
 	"intro":   "Sätt scenen med adress, känsla och viktigaste argument.",
 	"hall":    "Beskriv entréns intryck och funktion (ljus, förvaring, koppling till övriga ytor).",
@@ -314,66 +310,9 @@ func (g *llmGenerator) Generate(ctx context.Context, listing storage.Listing) (R
 		}
 	}
 
-	payload, _ := json.Marshal(struct {
-		Address        string                 `json:"address"`
-		Neighborhood   string                 `json:"neighborhood"`
-		City           string                 `json:"city"`
-		PropertyType   string                 `json:"property_type"`
-		Condition      string                 `json:"condition"`
-		Balcony        bool                   `json:"balcony"`
-		Floor          string                 `json:"floor"`
-		Association    string                 `json:"association"`
-		Length         string                 `json:"length"`
-		Tone           string                 `json:"tone"`
-		TargetAudience string                 `json:"target_audience"`
-		Highlights     []string               `json:"highlights"`
-		Fee            int                    `json:"fee"`
-		LivingArea     float64                `json:"living_area"`
-		Rooms          float64                `json:"rooms"`
-		Insights       storage.Insights       `json:"insights"`
-		Details        storage.Details        `json:"details"`
-		Sections       []structuredSectionReq `json:"sections"`
-	}{
-		Address:        listing.Address,
-		Neighborhood:   listing.Neighborhood,
-		City:           listing.City,
-		PropertyType:   listing.PropertyType,
-		Condition:      listing.Condition,
-		Balcony:        listing.Balcony,
-		Floor:          listing.Floor,
-		Association:    listing.Association,
-		Length:         listing.Length,
-		Tone:           listing.Tone,
-		TargetAudience: listing.TargetAudience,
-		Highlights:     listing.Highlights,
-		Fee:            listing.Fee,
-		LivingArea:     listing.LivingArea,
-		Rooms:          listing.Rooms,
-		Insights:       listing.Insights,
-		Details:        listing.Details,
-		Sections: []structuredSectionReq{
-			{Slug: "intro", Title: "Inledning"},
-			{Slug: "hall", Title: "Hall"},
-			{Slug: "kitchen", Title: "Kök"},
-			{Slug: "living", Title: "Vardagsrum"},
-			{Slug: "sleep", Title: "Sovrum & bad"},
-			{Slug: "area", Title: "Område & kommunikation"},
-			{Slug: "closing", Title: "Sammanfattning"},
-		},
-	})
-
-	systemPrompt := "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta. Om kunden har en stilprofil måste du följa den strikt."
-	userPrompt := fmt.Sprintf(`Returnera JSON {"sections":[{"slug":"","title":"","content":"","highlights":["..."]}, ...]}.
-Krav:
-- Skapa sektioner enligt "sections" i datan (intro, hall, kök, vardagsrum, sovrum/bad, område, avslutning).
-- 4–6 meningar per sektion. Variera språk, rytm och struktur.
-- "highlights" ska innehålla 2–4 punktlistor med de starkaste argumenten för sektionen.
-- I område-sektionen: använd geodata/Transit för att nämna matbutiker, parker, träning och kommunikationer (buss/tåg/tunnelbana) med uppskattade tider om de finns.
-- Respektera ton, målgrupp och detaljer i datan. Om något saknas: skriv professionellt och generellt utan att hitta på.
-Data:
-%s`, string(payload))
-	if profile := styleProfilePrompt(listing.StyleProfile); profile != "" {
-		userPrompt = fmt.Sprintf("%s\n\n%s", userPrompt, profile)
+	systemPrompt, userPrompt, err := prompts.BuildGenerationPrompts(listing)
+	if err != nil {
+		return Result{}, err
 	}
 
 	content, err := g.client.ChatCompletion(ctx, []llm.ChatMessage{
@@ -415,7 +354,7 @@ Mäklarens instruktion: "%s"
 Sektionens syfte: %s
 Geodata: %s
 `, section.Title, section.Slug, section.Content, originalWords, instruction, guideline, joinGeoInsights(listing.Insights.Geodata))
-	if profile := styleProfilePrompt(listing.StyleProfile); profile != "" {
+	if profile := prompts.FormatStyleProfile(listing.StyleProfile); profile != "" {
 		userPrompt = fmt.Sprintf(`%s
 
 %s`, userPrompt, profile)
@@ -618,33 +557,4 @@ func joinGeoInsights(geo storage.GeodataInsights) string {
 func countWords(text string) int {
 	fields := strings.Fields(text)
 	return len(fields)
-}
-
-func styleProfilePrompt(profile *storage.StyleProfile) string {
-	if profile == nil {
-		return ""
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Kundens stilprofil \"%s\":", profile.Name)
-	if profile.Description != "" {
-		fmt.Fprintf(&b, "\n- Beskrivning: %s", profile.Description)
-	}
-	if profile.Tone != "" {
-		fmt.Fprintf(&b, "\n- Önskad ton: %s", profile.Tone)
-	}
-	if profile.Guidelines != "" {
-		fmt.Fprintf(&b, "\n- Riktlinjer: %s", profile.Guidelines)
-	}
-	if len(profile.ExampleTexts) > 0 {
-		fmt.Fprintf(&b, "\n- Förebilder (imitera rytm/ordval):")
-		for i, ex := range profile.ExampleTexts {
-			if trimmed := strings.TrimSpace(ex); trimmed != "" {
-				fmt.Fprintf(&b, "\n  %d) %s", i+1, trimmed)
-			}
-		}
-	}
-	if len(profile.ForbiddenWords) > 0 {
-		fmt.Fprintf(&b, "\n- Undvik orden: %s", strings.Join(profile.ForbiddenWords, ", "))
-	}
-	return b.String()
 }

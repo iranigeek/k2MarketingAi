@@ -97,9 +97,14 @@ func (c *GeminiClient) ChatCompletion(ctx context.Context, messages []ChatMessag
 		return "", fmt.Errorf("marshal gemini payload: %w", err)
 	}
 
+	model := c.model
+	if override := modelFromContext(ctx); override != "" {
+		model = override
+	}
+
 	endpoint := fmt.Sprintf(
 		"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent",
-		url.PathEscape(c.model),
+		url.PathEscape(model),
 	)
 	if c.tokenSource == nil {
 		if strings.TrimSpace(c.apiKey) == "" {

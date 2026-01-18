@@ -18,6 +18,7 @@ import (
 	"k2MarketingAi/internal/events"
 	"k2MarketingAi/internal/generation"
 	"k2MarketingAi/internal/geodata"
+	"k2MarketingAi/internal/llm"
 	"k2MarketingAi/internal/media"
 	"k2MarketingAi/internal/storage"
 	"k2MarketingAi/internal/vision"
@@ -181,7 +182,11 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Generator != nil {
-		result, genErr := h.Generator.Generate(r.Context(), listing)
+		genCtx := r.Context()
+		if listing.StyleProfile != nil && listing.StyleProfile.CustomModel != "" {
+			genCtx = llm.WithModel(genCtx, listing.StyleProfile.CustomModel)
+		}
+		result, genErr := h.Generator.Generate(genCtx, listing)
 		if genErr != nil {
 			log.Printf("generator failed: %v", genErr)
 			http.Error(w, fmt.Sprintf("text generation failed: %v", genErr), http.StatusBadGateway)
@@ -300,7 +305,11 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 	section := listing.Sections[idx]
 	fallbackUsed := false
 	if h.Generator != nil {
-		updated, genErr := h.Generator.Rewrite(r.Context(), listing, section, req.Instruction)
+		genCtx := r.Context()
+		if listing.StyleProfile != nil && listing.StyleProfile.CustomModel != "" {
+			genCtx = llm.WithModel(genCtx, listing.StyleProfile.CustomModel)
+		}
+		updated, genErr := h.Generator.Rewrite(genCtx, listing, section, req.Instruction)
 		if genErr != nil {
 			log.Printf("rewrite failed: %v", genErr)
 			http.Error(w, fmt.Sprintf("text rewrite failed: %v", genErr), http.StatusBadGateway)

@@ -1,0 +1,39 @@
+{
+  "port": "8080",
+  "database_url": "postgres://postgres:postgres@db:5432/k2db?sslmode=disable",
+  "media": {
+    "bucket": "",
+    "region": "",
+    "endpoint": "",
+    "public_url": "",
+    "key_prefix": "",
+    "force_path_style": false,
+    "access_key_id": "",
+    "secret_access_key": ""
+  },
+  "geodata": {
+    "google_places_api_key": "<google-places-api-key>",
+    "trafiklab_api_key": "",
+    "cache_ttl_minutes": 30
+  },
+  "ai": {
+    "provider": "gemini",
+    "gemini": {
+      "api_key": "<gemini-api-key>",
+      "model": "gemini-1.5-pro-latest",
+      "vision_model": "gemini-1.5-flash-001",
+      "image_model": "gemini-2.5-flash-image",
+      "timeout_seconds": 60,
+      "service_account": "/secrets/vertex-ai.json",
+      "service_account_json": ""
+    },
+    "imagen": {
+      "enabled": false,
+      "project_id": "",
+      "location": "us-central1",
+      "model": "image-generation@006",
+      "service_account": "/secrets/vertex-ai.json",
+      "service_account_json": ""
+    }
+  }
+}

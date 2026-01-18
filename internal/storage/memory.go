@@ -65,6 +65,11 @@ func (s *InMemoryStore) ListListings(_ context.Context) ([]Listing, error) {
 	return snapshot, nil
 }
 
+// ListAllListings returns the same snapshot as ListListings for the in-memory store.
+func (s *InMemoryStore) ListAllListings(ctx context.Context) ([]Listing, error) {
+	return s.ListListings(ctx)
+}
+
 // Close satisfies the Store interface.
 func (s *InMemoryStore) Close() {}
 

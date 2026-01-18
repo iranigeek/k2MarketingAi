@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -59,13 +60,22 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 
 // ListListings returns a slice of the most recent listings.
 func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
+	return s.fetchListings(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
+}
+
+// ListAllListings returns every stored listing (used for dataset exports).
+func (s *PostgresStore) ListAllListings(ctx context.Context) ([]Listing, error) {
+	return s.fetchListings(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings ORDER BY created_at DESC`)
+}
+
+func (s *PostgresStore) fetchListings(ctx context.Context, query string, args ...any) ([]Listing, error) {
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query listings: %w", err)
 	}
 	defer rows.Close()
 
-	listings := []Listing{}
+	var listings []Listing
 	for rows.Next() {
 		item, err := scanListing(rows)
 		if err != nil {
@@ -73,7 +83,6 @@ func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
 		}
 		listings = append(listings, item)
 	}
-
 	return listings, nil
 }
 
@@ -204,8 +213,8 @@ func (s *PostgresStore) SaveStyleProfile(ctx context.Context, profile StyleProfi
 	}
 	profile.UpdatedAt = now
 	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO style_profiles (id, name, description, tone, guidelines, example_texts, forbidden_words, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, now()), $9)
+		INSERT INTO style_profiles (id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11, now()), $12)
 		ON CONFLICT (id) DO UPDATE SET
 			name=EXCLUDED.name,
 			description=EXCLUDED.description,
@@ -213,8 +222,11 @@ func (s *PostgresStore) SaveStyleProfile(ctx context.Context, profile StyleProfi
 			guidelines=EXCLUDED.guidelines,
 			example_texts=EXCLUDED.example_texts,
 			forbidden_words=EXCLUDED.forbidden_words,
+			custom_model=EXCLUDED.custom_model,
+			dataset_uri=EXCLUDED.dataset_uri,
+			last_trained_at=EXCLUDED.last_trained_at,
 			updated_at=EXCLUDED.updated_at
-	`, profile.ID, profile.Name, profile.Description, profile.Tone, profile.Guidelines, profile.ExampleTexts, profile.ForbiddenWords, nullableTime(profile.CreatedAt), profile.UpdatedAt); err != nil {
+	`, profile.ID, profile.Name, profile.Description, profile.Tone, profile.Guidelines, profile.ExampleTexts, profile.ForbiddenWords, nullString(profile.CustomModel), nullString(profile.DatasetURI), profile.LastTrainedAt, nullableTime(profile.CreatedAt), profile.UpdatedAt); err != nil {
 		return StyleProfile{}, fmt.Errorf("save style profile: %w", err)
 	}
 	return s.GetStyleProfile(ctx, profile.ID)
@@ -227,9 +239,16 @@ func nullableTime(t time.Time) *time.Time {
 	return &t
 }
 
+func nullString(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
 // ListStyleProfiles returns all stored style profiles.
 func (s *PostgresStore) ListStyleProfiles(ctx context.Context) ([]StyleProfile, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, created_at, updated_at FROM style_profiles ORDER BY name`)
+	rows, err := s.pool.Query(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at FROM style_profiles ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("list style profiles: %w", err)
 	}
@@ -248,7 +267,7 @@ func (s *PostgresStore) ListStyleProfiles(ctx context.Context) ([]StyleProfile, 
 
 // GetStyleProfile fetches a profile by ID.
 func (s *PostgresStore) GetStyleProfile(ctx context.Context, id string) (StyleProfile, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, created_at, updated_at FROM style_profiles WHERE id=$1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at FROM style_profiles WHERE id=$1`, id)
 	profile, err := scanStyleProfile(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -324,9 +343,24 @@ func scanListing(row rowScanner) (Listing, error) {
 }
 
 func scanStyleProfile(row rowScanner) (StyleProfile, error) {
-	var profile StyleProfile
-	if err := row.Scan(&profile.ID, &profile.Name, &profile.Description, &profile.Tone, &profile.Guidelines, &profile.ExampleTexts, &profile.ForbiddenWords, &profile.CreatedAt, &profile.UpdatedAt); err != nil {
+	var (
+		profile     StyleProfile
+		customModel sql.NullString
+		datasetURI  sql.NullString
+		lastTrained sql.NullTime
+	)
+	if err := row.Scan(&profile.ID, &profile.Name, &profile.Description, &profile.Tone, &profile.Guidelines, &profile.ExampleTexts, &profile.ForbiddenWords, &customModel, &datasetURI, &lastTrained, &profile.CreatedAt, &profile.UpdatedAt); err != nil {
 		return StyleProfile{}, fmt.Errorf("scan style profile: %w", err)
+	}
+	if customModel.Valid {
+		profile.CustomModel = customModel.String
+	}
+	if datasetURI.Valid {
+		profile.DatasetURI = datasetURI.String
+	}
+	if lastTrained.Valid {
+		t := lastTrained.Time
+		profile.LastTrainedAt = &t
 	}
 	return profile, nil
 }
