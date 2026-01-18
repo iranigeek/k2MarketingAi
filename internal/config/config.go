@@ -43,11 +43,13 @@ type AIConfig struct {
 
 // GeminiConfig holds Google Generative Language credentials.
 type GeminiConfig struct {
-	APIKey         string `json:"api_key"`
-	Model          string `json:"model"`
-	VisionModel    string `json:"vision_model"`
-	ImageModel     string `json:"image_model"`
-	TimeoutSeconds int    `json:"timeout_seconds"`
+	APIKey             string `json:"api_key"`
+	Model              string `json:"model"`
+	VisionModel        string `json:"vision_model"`
+	ImageModel         string `json:"image_model"`
+	TimeoutSeconds     int    `json:"timeout_seconds"`
+	ServiceAccount     string `json:"service_account"`
+	ServiceAccountJSON string `json:"service_account_json"`
 }
 
 // ImagenConfig holds Vertex AI Imagen settings.

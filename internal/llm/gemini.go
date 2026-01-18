@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 // ChatMessage represents a generic chat turn in the prompt history.
@@ -24,13 +26,14 @@ type Client interface {
 
 // GeminiClient wraps the Google Generative Language API.
 type GeminiClient struct {
-	apiKey string
-	model  string
-	client *http.Client
+	apiKey      string
+	model       string
+	client      *http.Client
+	tokenSource oauth2.TokenSource
 }
 
 // NewGeminiClient constructs a Gemini client for the desired model.
-func NewGeminiClient(apiKey, model string, timeout time.Duration) *GeminiClient {
+func NewGeminiClient(apiKey, model string, timeout time.Duration, tokenSource oauth2.TokenSource) *GeminiClient {
 	if model == "" {
 		model = "gemini-3-pro-preview"
 	}
@@ -38,9 +41,10 @@ func NewGeminiClient(apiKey, model string, timeout time.Duration) *GeminiClient 
 		timeout = 1000 * time.Second
 	}
 	return &GeminiClient{
-		apiKey: apiKey,
-		model:  normalizeModel(model),
-		client: &http.Client{Timeout: timeout},
+		apiKey:      apiKey,
+		model:       normalizeModel(model),
+		client:      &http.Client{Timeout: timeout},
+		tokenSource: tokenSource,
 	}
 }
 
@@ -94,16 +98,29 @@ func (c *GeminiClient) ChatCompletion(ctx context.Context, messages []ChatMessag
 	}
 
 	endpoint := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+		"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent",
 		url.PathEscape(c.model),
-		url.QueryEscape(c.apiKey),
 	)
+	if c.tokenSource == nil {
+		if strings.TrimSpace(c.apiKey) == "" {
+			return "", fmt.Errorf("gemini: missing API key or service account credentials")
+		}
+		endpoint = fmt.Sprintf("%s?key=%s", endpoint, url.QueryEscape(c.apiKey))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("gemini request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+
+	if c.tokenSource != nil {
+		token, err := c.tokenSource.Token()
+		if err != nil {
+			return "", fmt.Errorf("gemini: fetch oauth token: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {

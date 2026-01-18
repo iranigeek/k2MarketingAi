@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+
 	"k2MarketingAi/internal/config"
 	"k2MarketingAi/internal/events"
 	"k2MarketingAi/internal/generation"
@@ -71,10 +74,21 @@ func main() {
 		visionRenderer vision.ImageGenerator
 		imagenRenderer vision.ImagenClient
 	)
+	var geminiTokenSource oauth2.TokenSource
+	if tokenBytes, err := loadServiceAccountJSON(cfg.AI.Gemini.ServiceAccount, cfg.AI.Gemini.ServiceAccountJSON); err != nil {
+		log.Fatalf("failed to load gemini service account: %v", err)
+	} else if len(tokenBytes) > 0 {
+		creds, err := google.CredentialsFromJSON(ctx, tokenBytes, "https://www.googleapis.com/auth/generative-language")
+		if err != nil {
+			log.Fatalf("failed to parse gemini service account: %v", err)
+		}
+		geminiTokenSource = creds.TokenSource
+	}
+
 	switch {
-	case strings.EqualFold(cfg.AI.Provider, "gemini") && cfg.AI.Gemini.APIKey != "":
+	case strings.EqualFold(cfg.AI.Provider, "gemini") && (cfg.AI.Gemini.APIKey != "" || geminiTokenSource != nil):
 		timeout := time.Duration(cfg.AI.Gemini.TimeoutSeconds) * time.Second
-		geminiClient := llm.NewGeminiClient(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.Model, timeout)
+		geminiClient := llm.NewGeminiClient(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.Model, timeout, geminiTokenSource)
 		generator = generation.NewLLM(geminiClient)
 		visionAnalyzer = vision.NewGeminiAnalyzer(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.VisionModel, timeout)
 		visionDesigner = vision.NewGeminiDesigner(geminiClient)
@@ -133,4 +147,20 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server failed: %v", err)
 	}
+}
+
+func loadServiceAccountJSON(path, inline string) ([]byte, error) {
+	trimmed := strings.TrimSpace(inline)
+	if trimmed != "" {
+		return []byte(trimmed), nil
+	}
+	p := strings.TrimSpace(path)
+	if p == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }

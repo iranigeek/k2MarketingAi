@@ -157,7 +157,9 @@ Generering sker via Google Gemini (Generative Language API) när `config.json` i
     "model": "gemini-1.5-pro-latest",
     "vision_model": "gemini-1.5-flash-001",
     "image_model": "gemini-2.5-flash-image",
-    "timeout_seconds": 60
+    "timeout_seconds": 60,
+    "service_account": "/path/till/service-account.json",
+    "service_account_json": ""
   },
   "imagen": {
     "enabled": true,
@@ -169,7 +171,7 @@ Generering sker via Google Gemini (Generative Language API) när `config.json` i
 }
 ```
 
-`vision_model` styr bildanalysen och `image_model` används för Geminis text-baserade render. För exakt foto-redigering använder vi Vertex Imagen (`ai.imagen`). Sätt `enabled` till `true` när du vill aktivera den vägen och ange därefter ditt GCP-projekt, placering (oftast `us-central1`) samt modellen `image-generation@006`. Har du inget service-konto kan samma API-nyckel som för Gemini användas; annars pekar du ut JSON-filen via `service_account`. `timeout_seconds` går att tweaka om du behöver längre (eller kortare) väntetid för anropen; standarden är 60 sekunder.
+`vision_model` styr bildanalysen och `image_model` används för Geminis text-baserade render. Vissa Gemini-modeller (t.ex. 3.0 Pro) kräver OAuth i stället för API-nyckel. Ange då antingen `service_account` (sökväg till JSON-filen) eller `service_account_json` (inline) så att backend kan hämta en OAuth-token automatiskt. För exakt foto-redigering använder vi Vertex Imagen (`ai.imagen`). Sätt `enabled` till `true` när du vill aktivera den vägen och ange därefter ditt GCP-projekt, placering (oftast `us-central1`) samt modellen `image-generation@006`. Har du inget service-konto kan samma API-nyckel som för Gemini användas; annars pekar du ut JSON-filen via `service_account`. `timeout_seconds` går att tweaka om du behöver längre (eller kortare) väntetid för anropen; standarden är 60 sekunder.
 
 Geodata hämtas via Google Geocoding + Places. Lägg nyckeln i `config.json`:
 
@@ -192,16 +194,6 @@ Utvecklingsläge: om nyckeln saknas faller providern tillbaka till statiska exem
 
 - Kodstil: standard Go-format (`go fmt ./...`).
 - Frontend: vanilla HTML/CSS/JS för enkelhet; byt gärna till React/Svelte när behovet växer.
-
-## Kubernetes & Argo CD
-
-Repo:t innehåller nu en Dockerfile samt manifest under `deploy/`. Flödet ser ut så här i korthet:
-
-1. Bygg och pusha en bild (`Dockerfile`).
-2. Skapa en `config.json` för produktion och lägg den i ett K8s-Secret (`k2marketing-config`), t.ex. `kubectl -n k2marketing create secret generic k2marketing-config --from-file=config.json=config.prod.json`.
-3. Anpassa `deploy/k8s/overlays/prod/kustomization.yaml` med rätt bildtagg/domän och applicera med `kustomize build ... | kubectl apply -f -`, eller låt Argo CD läsa `deploy/argocd/application.yaml`.
-
-Se `deploy/README.md` för mer detaljer (TLS, Argo-flöde, mm).
 
 ## Så committar du till `main`
 

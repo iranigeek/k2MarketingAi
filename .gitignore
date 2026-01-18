@@ -16,4 +16,3 @@ node_modules/
 # Build artifacts
 /dist/
 config.json
-deploy/secrets/
