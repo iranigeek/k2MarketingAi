@@ -42,9 +42,10 @@ type Listing struct {
 
 // Section represents an editable block of text in the listing description.
 type Section struct {
-	Slug    string `json:"slug"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
+	Slug       string   `json:"slug"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	Highlights []string `json:"highlights,omitempty"`
 }
 
 // Insights aggregates AI/automation derived metadata for a listing.
@@ -171,10 +172,15 @@ type History map[string][]SectionVersion
 
 // SectionVersion tracks historical changes to a section.
 type SectionVersion struct {
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Source    string    `json:"source"`
-	Timestamp time.Time `json:"timestamp"`
+	Title          string    `json:"title"`
+	Content        string    `json:"content"`
+	Source         string    `json:"source"`
+	Instruction    string    `json:"instruction,omitempty"`
+	Tone           string    `json:"tone,omitempty"`
+	TargetAudience string    `json:"target_audience,omitempty"`
+	Highlights     []string  `json:"highlights,omitempty"`
+	Notes          string    `json:"notes,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
 }
 
 // GeodataInsights contains contextual information about the neighborhood.

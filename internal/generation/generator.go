@@ -290,6 +290,11 @@ type llmGenerator struct {
 	client llm.Client
 }
 
+type structuredSectionReq struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+
 var sectionGuidelines = map[string]string{
 	"intro":   "Sätt scenen med adress, känsla och viktigaste argument.",
 	"hall":    "Beskriv entréns intryck och funktion (ljus, förvaring, koppling till övriga ytor).",
@@ -310,23 +315,24 @@ func (g *llmGenerator) Generate(ctx context.Context, listing storage.Listing) (R
 	}
 
 	payload, _ := json.Marshal(struct {
-		Address        string           `json:"address"`
-		Neighborhood   string           `json:"neighborhood"`
-		City           string           `json:"city"`
-		PropertyType   string           `json:"property_type"`
-		Condition      string           `json:"condition"`
-		Balcony        bool             `json:"balcony"`
-		Floor          string           `json:"floor"`
-		Association    string           `json:"association"`
-		Length         string           `json:"length"`
-		Tone           string           `json:"tone"`
-		TargetAudience string           `json:"target_audience"`
-		Highlights     []string         `json:"highlights"`
-		Fee            int              `json:"fee"`
-		LivingArea     float64          `json:"living_area"`
-		Rooms          float64          `json:"rooms"`
-		Insights       storage.Insights `json:"insights"`
-		Sections       []string         `json:"sections"`
+		Address        string                 `json:"address"`
+		Neighborhood   string                 `json:"neighborhood"`
+		City           string                 `json:"city"`
+		PropertyType   string                 `json:"property_type"`
+		Condition      string                 `json:"condition"`
+		Balcony        bool                   `json:"balcony"`
+		Floor          string                 `json:"floor"`
+		Association    string                 `json:"association"`
+		Length         string                 `json:"length"`
+		Tone           string                 `json:"tone"`
+		TargetAudience string                 `json:"target_audience"`
+		Highlights     []string               `json:"highlights"`
+		Fee            int                    `json:"fee"`
+		LivingArea     float64                `json:"living_area"`
+		Rooms          float64                `json:"rooms"`
+		Insights       storage.Insights       `json:"insights"`
+		Details        storage.Details        `json:"details"`
+		Sections       []structuredSectionReq `json:"sections"`
 	}{
 		Address:        listing.Address,
 		Neighborhood:   listing.Neighborhood,
@@ -344,16 +350,26 @@ func (g *llmGenerator) Generate(ctx context.Context, listing storage.Listing) (R
 		LivingArea:     listing.LivingArea,
 		Rooms:          listing.Rooms,
 		Insights:       listing.Insights,
-		Sections:       []string{"main"},
+		Details:        listing.Details,
+		Sections: []structuredSectionReq{
+			{Slug: "intro", Title: "Inledning"},
+			{Slug: "hall", Title: "Hall"},
+			{Slug: "kitchen", Title: "Kök"},
+			{Slug: "living", Title: "Vardagsrum"},
+			{Slug: "sleep", Title: "Sovrum & bad"},
+			{Slug: "area", Title: "Område & kommunikation"},
+			{Slug: "closing", Title: "Sammanfattning"},
+		},
 	})
 
-	systemPrompt := "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver unika, varierade och faktaförankrade annonstexter på svenska. Hitta aldrig på specifika fakta. Om information saknas, skriv generellt och professionellt."
-	userPrompt := fmt.Sprintf(`Generera JSON med fältet "sections" som innehåller exakt ett objekt { "slug": "main", "title": "Annons", "content": "..." }.
+	systemPrompt := "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta."
+	userPrompt := fmt.Sprintf(`Returnera JSON {"sections":[{"slug":"","title":"","content":"","highlights":["..."]}, ...]}.
 Krav:
-- Använd det givna datat. Hitta inte på siffror eller detaljer som saknas.
-- Variera meningslängd och struktur, byt gärna ordning på stycken.
-- Respektera vald ton och längd (kort/normal/lång) om den finns.
-- Om balkong, förening, våning eller skick saknas: hoppa över eller skriv neutralt.
+- Skapa sektioner enligt "sections" i datan (intro, hall, kök, vardagsrum, sovrum/bad, område, avslutning).
+- 4–6 meningar per sektion. Variera språk, rytm och struktur.
+- "highlights" ska innehålla 2–4 punktlistor med de starkaste argumenten för sektionen.
+- I område-sektionen: använd geodata/Transit för att nämna matbutiker, parker, träning och kommunikationer (buss/tåg/tunnelbana) med uppskattade tider om de finns.
+- Respektera ton, målgrupp och detaljer i datan. Om något saknas: skriv professionellt och generellt utan att hitta på.
 Data:
 %s`, string(payload))
 

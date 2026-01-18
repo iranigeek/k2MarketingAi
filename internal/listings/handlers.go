@@ -189,7 +189,11 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 			listing.FullCopy = result.FullCopy
 		}
 	}
-	recordHistoryForAll(&listing, "generate")
+	recordHistoryForAll(&listing, "generate", historyContext{
+		Tone:           listing.Tone,
+		TargetAudience: listing.TargetAudience,
+		Highlights:     listing.Highlights,
+	})
 	if listing.FullCopy == "" {
 		listing.FullCopy = composeFullCopy(listing.Sections)
 	}
@@ -250,7 +254,7 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 // RewriteSection accepts instructions and rewrites a section using the generator.
 func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	slug := chi.URLParam(r, "slug")
+	slug := normalizeSlug(chi.URLParam(r, "slug"))
 	if id == "" || slug == "" {
 		http.Error(w, "id and slug are required", http.StatusBadRequest)
 		return
@@ -296,7 +300,16 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	listing.Sections[idx] = section
-	addHistoryEntry(&listing, section, "rewrite")
+	rewriteCtx := historyContext{
+		Instruction:    strings.TrimSpace(req.Instruction),
+		Tone:           listing.Tone,
+		TargetAudience: listing.TargetAudience,
+		Highlights:     listing.Highlights,
+	}
+	if fallbackUsed {
+		rewriteCtx.Notes = "lokal fallback rewriter"
+	}
+	addHistoryEntry(&listing, section, "rewrite", rewriteCtx)
 	listing.FullCopy = composeFullCopy(listing.Sections)
 	deriveStatus(&listing)
 	updated, err := h.Store.UpdateListingSections(r.Context(), id, listing.Sections, listing.FullCopy, listing.History, listing.Status)
@@ -317,7 +330,7 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 // UpdateSection saves manual edits for a section.
 func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	slug := chi.URLParam(r, "slug")
+	slug := normalizeSlug(chi.URLParam(r, "slug"))
 	if id == "" || slug == "" {
 		http.Error(w, "id and slug are required", http.StatusBadRequest)
 		return
@@ -356,13 +369,22 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 			Content: req.Content,
 		}
 		listing.Sections = append(listing.Sections, newSection)
-		addHistoryEntry(&listing, newSection, "manual")
+		addHistoryEntry(&listing, newSection, "manual", historyContext{
+			Tone:           listing.Tone,
+			TargetAudience: listing.TargetAudience,
+			Highlights:     listing.Highlights,
+		})
 	} else {
 		if req.Title != "" {
 			listing.Sections[idx].Title = req.Title
 		}
 		listing.Sections[idx].Content = req.Content
-		addHistoryEntry(&listing, listing.Sections[idx], "manual")
+		addHistoryEntry(&listing, listing.Sections[idx], "manual", historyContext{
+			Tone:           listing.Tone,
+			TargetAudience: listing.TargetAudience,
+			Highlights:     listing.Highlights,
+			Notes:          "manuell uppdatering",
+		})
 	}
 
 	listing.FullCopy = composeFullCopy(listing.Sections)
@@ -382,7 +404,7 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 // DeleteSection removes a section by slug.
 func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	slug := chi.URLParam(r, "slug")
+	slug := normalizeSlug(chi.URLParam(r, "slug"))
 	if id == "" || slug == "" {
 		http.Error(w, "id and slug are required", http.StatusBadRequest)
 		return
@@ -404,12 +426,12 @@ func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listing.History[slug] = append([]storage.SectionVersion{{
-		Title:     listing.Sections[idx].Title,
-		Content:   listing.Sections[idx].Content,
-		Source:    "delete",
-		Timestamp: time.Now(),
-	}}, listing.History[slug]...)
+	addHistoryEntry(&listing, listing.Sections[idx], "delete", historyContext{
+		Tone:           listing.Tone,
+		TargetAudience: listing.TargetAudience,
+		Highlights:     listing.Highlights,
+		Notes:          "sektionen togs bort",
+	})
 
 	listing.Sections = append(listing.Sections[:idx], listing.Sections[idx+1:]...)
 	listing.FullCopy = composeFullCopy(listing.Sections)
@@ -835,7 +857,7 @@ func buildSectionsFromInput(req CreateListingRequest, imageURL string) []storage
 	seen := map[string]bool{}
 
 	for _, s := range req.Sections {
-		slug := strings.TrimSpace(s.Slug)
+		slug := normalizeSlug(s.Slug)
 		if slug == "" {
 			continue
 		}
@@ -945,12 +967,28 @@ func describeRooms(rooms float64, area float64) string {
 }
 
 func findSectionIndex(sections []storage.Section, slug string) int {
+	target := normalizeSlug(slug)
 	for i, section := range sections {
-		if section.Slug == slug {
+		sectionSlug := normalizeSlug(section.Slug)
+		if sectionSlug == target {
+			return i
+		}
+		if sectionSlug == "" && target == normalizeSlug(section.Title) {
 			return i
 		}
 	}
 	return -1
+}
+
+func normalizeSlug(value string) string {
+	slug := strings.ToLower(strings.TrimSpace(value))
+	slug = strings.Trim(slug, "/")
+	slug = strings.ReplaceAll(slug, "_", "-")
+	slug = strings.Join(strings.FieldsFunc(slug, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n'
+	}), "-")
+	slug = strings.Trim(slug, "-")
+	return slug
 }
 
 func formatRooms(rooms float64) string {
@@ -980,13 +1018,21 @@ func composeFullCopy(sections []storage.Section) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func recordHistoryForAll(listing *storage.Listing, source string) {
+func recordHistoryForAll(listing *storage.Listing, source string, ctx historyContext) {
 	for _, section := range listing.Sections {
-		addHistoryEntry(listing, section, source)
+		addHistoryEntry(listing, section, source, ctx)
 	}
 }
 
-func addHistoryEntry(listing *storage.Listing, section storage.Section, source string) {
+type historyContext struct {
+	Instruction    string
+	Tone           string
+	TargetAudience string
+	Highlights     []string
+	Notes          string
+}
+
+func addHistoryEntry(listing *storage.Listing, section storage.Section, source string, ctx historyContext) {
 	if listing.History == nil {
 		listing.History = storage.History{}
 	}
@@ -994,10 +1040,18 @@ func addHistoryEntry(listing *storage.Listing, section storage.Section, source s
 		return
 	}
 	entry := storage.SectionVersion{
-		Title:     section.Title,
-		Content:   section.Content,
-		Source:    source,
-		Timestamp: time.Now(),
+		Title:          section.Title,
+		Content:        section.Content,
+		Source:         source,
+		Instruction:    strings.TrimSpace(ctx.Instruction),
+		Tone:           ctx.Tone,
+		TargetAudience: ctx.TargetAudience,
+		Highlights:     append([]string(nil), ctx.Highlights...),
+		Notes:          strings.TrimSpace(ctx.Notes),
+		Timestamp:      time.Now(),
+	}
+	if len(entry.Highlights) == 0 {
+		entry.Highlights = nil
 	}
 	entries := listing.History[section.Slug]
 	entries = append([]storage.SectionVersion{entry}, entries...)
