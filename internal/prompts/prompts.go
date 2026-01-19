@@ -8,14 +8,16 @@ import (
 	"k2MarketingAi/internal/storage"
 )
 
-const systemPrompt = "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta. Om kunden har en stilprofil måste du följa den strikt."
+const systemPrompt = "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta. Hoppa över självklara basfunktioner och allt som beskriver vad man gör i rummen. Ta bara med det som är relevant och viktigt för boendet och håll texterna så korta som möjligt (max 225 ord totalt). Lyft alltid området (service, skolor/förskolor, natur, kommunikationer) när data finns. Om kunden har en stilprofil måste du följa den strikt."
 
 const userPromptTemplate = `Returnera JSON {"sections":[{"slug":"","title":"","content":"","highlights":["..."]}, ...]}.
 Krav:
 - Skapa sektioner enligt "sections" i datan (intro, hall, kök, vardagsrum, sovrum/bad, område, avslutning).
-- 4–6 meningar per sektion. Variera språk, rytm och struktur.
-- "highlights" ska innehålla 2–4 punktlistor med de starkaste argumenten för sektionen.
-- I område-sektionen: använd geodata/Transit för att nämna matbutiker, parker, träning och kommunikationer (buss/tåg/tunnelbana) med uppskattade tider om de finns.
+- 1 mening per sektion. Skriv enkelt och rakt så att endast det absolut relevanta återstår.
+- "highlights" ska innehålla 1–2 punktlistor med de starkaste argumenten för sektionen.
+- Ta inte med självklara basfunktioner eller vad man gör i rummen; fokusera på det som verkligen säljer (läge, skick, material/ytskikt, ljus, utsikt, förvaring, förening, avgift, uteplats/balkong, energieffektivitet, geodata).
+- Total text: max 225 ord (alla sektioner tillsammans).
+- I område-sektionen: använd geodata/Transit för att nämna matbutiker, parker, träning, skolor/förskolor och kommunikationer (buss/tåg/tunnelbana) med uppskattade tider om de finns; undvik att konstatera självklarheter som att toaletten fyller sin funktion.
 - Respektera ton, målgrupp och detaljer i datan. Om något saknas: skriv professionellt och generellt utan att hitta på.
 Data:
 %s`

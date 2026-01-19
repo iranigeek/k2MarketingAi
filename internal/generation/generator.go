@@ -44,33 +44,43 @@ func buildFullAd(listing storage.Listing) string {
 	location := strings.TrimSpace(strings.Join([]string{listing.Neighborhood, listing.City}, ", "))
 	tone := defaultTone(listing.Tone)
 
-	fmt.Fprintf(&b, "Välkommen till %s", listing.Address)
+	fmt.Fprintf(&b, "V?lkommen till %s", listing.Address)
 	if location != "" {
 		fmt.Fprintf(&b, " i %s", location)
 	}
-	fmt.Fprintf(&b, " – en %s %s som levererar %s.", strings.ToLower(tone), strings.ToLower(orDefault(listing.PropertyType, "bostad")), describeRooms(listing.Rooms, listing.LivingArea))
+	fmt.Fprintf(&b, " ? %s %s med %s.", strings.ToLower(tone), strings.ToLower(orDefault(listing.PropertyType, "bostad")), describeRooms(listing.Rooms, listing.LivingArea))
 
-	if listing.Balcony {
-		fmt.Fprint(&b, " Här finns balkong eller uteplats för naturligt ljus och frisk luft.")
-	}
+	var points []string
 	if listing.Condition != "" {
-		fmt.Fprintf(&b, " Skicket upplevs som %s vilket gör det enkelt att flytta in.", strings.ToLower(listing.Condition))
+		points = append(points, fmt.Sprintf("skick: %s", strings.ToLower(listing.Condition)))
+	}
+	if listing.Balcony {
+		points = append(points, "balkong/uteplats")
 	}
 	if listing.Floor != "" {
-		fmt.Fprintf(&b, " Våning: %s.", listing.Floor)
+		points = append(points, fmt.Sprintf("v?ning %s", listing.Floor))
 	}
 	if listing.Association != "" {
-		fmt.Fprintf(&b, " Förening: %s.", listing.Association)
+		if listing.Fee > 0 {
+			points = append(points, fmt.Sprintf("f?rening %s, avgift ca %d kr/m?n", listing.Association, listing.Fee))
+		} else {
+			points = append(points, fmt.Sprintf("f?rening %s", listing.Association))
+		}
+	} else if listing.Fee > 0 {
+		points = append(points, fmt.Sprintf("avgift ca %d kr/m?n", listing.Fee))
 	}
 	if len(listing.Highlights) > 0 {
-		fmt.Fprintf(&b, " Fördelar: %s.", strings.Join(listing.Highlights, ", "))
+		points = append(points, fmt.Sprintf("plus: %s", strings.Join(listing.Highlights, ", ")))
 	}
 
-	fmt.Fprint(&b, "\n\nPlanlösningen nyttjar ytan smart mellan sociala och privata delar. Köket och vardagsrummet bjuder in till både vardag och middagar, medan sovrummen ger ro. Badrumsdelen beskrivs neutralt utan påhittade detaljer för att hålla fakta korrekt.")
-
-	fmt.Fprint(&b, "\n\nOmrådet kan beskrivas generellt med närhet till service, natur eller kommunikationer beroende på vad som faktiskt finns tillgängligt. Texten undviker att hitta på namn eller siffror som inte finns i underlaget.")
-
-	fmt.Fprint(&b, "\n\nAvslutningen sammanfattar bostadens känsla och inbjuder till visning med ett språk som känns unikt, varierat och professionellt.")
+	if len(points) > 0 {
+		fmt.Fprintf(&b, " Nycklar: %s.", strings.Join(points, "; "))
+	}
+	if geo := listing.Insights.Geodata; len(geo.PointsOfInterest) > 0 || len(geo.Transit) > 0 {
+		if summary := joinGeoInsights(geo); strings.TrimSpace(summary) != "" {
+			fmt.Fprintf(&b, " Område: %s.", summary)
+		}
+	}
 
 	return strings.TrimSpace(b.String())
 }
@@ -128,6 +138,9 @@ func buildAreaCopy(listing storage.Listing) string {
 	}
 	if names := summarizeList(append(grouped["restaurant"], grouped["cafe"]...), 2); names != "" {
 		sentences = append(sentences, fmt.Sprintf("I kvarteret väntar restauranger och caféer som %s.", names))
+	}
+	if names := summarizeList(grouped["school"], 2); names != "" {
+		sentences = append(sentences, fmt.Sprintf("Skolor och förskolor i närheten: %s.", names))
 	}
 	if names := summarizeList(grouped["park"], 2); names != "" {
 		sentences = append(sentences, fmt.Sprintf("För rekreation finns gröna platser som %s.", names))
@@ -209,6 +222,8 @@ func categorizePOI(category string) string {
 		return "park"
 	case "gym":
 		return "gym"
+	case "skola", "förskola", "forskola":
+		return "school"
 	default:
 		return "other"
 	}
@@ -343,6 +358,8 @@ func (g *llmGenerator) Rewrite(ctx context.Context, listing storage.Listing, sec
 	systemPrompt := `Du är en skicklig svensk copywriter. Polera text för en given sektion i en bostadsannons.
 - Undvik klyschor och överdrifter.
 - Behåll fakta men gör texten mer målande och säljande.
+- Hoppa över självklara basfunktioner och beskriv inte vad man gör i rummen.
+- Skriv kortfattat, rakt och ta bara med det som är viktigt för boendet.
 - Matcha ursprunglig längd (minst 85 % av originalet) eller gör den något längre.
 - Följ kundens stilprofil om den finns.
 - Returnera JSON {"title":"...","content":"..."}.
@@ -493,9 +510,12 @@ Data:
 
 func desiredWordCount(meta storage.MetaInfo) int {
 	if meta.DesiredWordCount > 0 {
+		if meta.DesiredWordCount > 225 {
+			return 225
+		}
 		return meta.DesiredWordCount
 	}
-	return 280
+	return 150
 }
 
 func joinGeoInsights(geo storage.GeodataInsights) string {
