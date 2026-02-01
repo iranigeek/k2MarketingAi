@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"k2MarketingAi/internal/geodata"
 	"k2MarketingAi/internal/storage"
 )
 
-const systemPrompt = "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta. Hoppa över självklara basfunktioner och allt som beskriver vad man gör i rummen. Ta bara med det som är relevant och viktigt för boendet och håll texterna så korta som möjligt (max 225 ord totalt). Lyft alltid området (service, skolor/förskolor, natur, kommunikationer) när data finns. Om kunden har en stilprofil måste du följa den strikt."
+const systemPrompt = "Du är en prisbelönt svensk copywriter för fastighetsmäklare. Du skriver på svenska, använder geodata när den finns och beskriver kommunikationer (buss/tåg/tunnelbana) konkret. Hitta inte på fakta. Hoppa över självklara basfunktioner och allt som beskriver vad man gör i rummen. Nämn aldrig att toaletten fyller sin funktion. Undvik självklarheter som att man kan laga mat i köket eller umgås i vardagsrummet – fokusera på säljande egenskaper och unika detaljer. Prioritera områdes- och kommunikationsdata (geodata) när den finns; korta hellre ned rumsbeskrivningar än geodata. Ta bara med det som är relevant och viktigt för boendet och håll texterna så korta som möjligt (max 225 ord totalt). Lyft alltid området (service, skolor/förskolor, natur, kommunikationer) när data finns. Om kunden har en stilprofil måste du följa den strikt."
 
 const userPromptTemplate = `Returnera JSON {"sections":[{"slug":"","title":"","content":"","highlights":["..."]}, ...]}.
 Krav:
@@ -16,8 +17,13 @@ Krav:
 - 1 mening per sektion. Skriv enkelt och rakt så att endast det absolut relevanta återstår.
 - "highlights" ska innehålla 1–2 punktlistor med de starkaste argumenten för sektionen.
 - Ta inte med självklara basfunktioner eller vad man gör i rummen; fokusera på det som verkligen säljer (läge, skick, material/ytskikt, ljus, utsikt, förvaring, förening, avgift, uteplats/balkong, energieffektivitet, geodata).
+- Nämn aldrig att toaletten fyller sin funktion eller liknande självklarheter.
+- Undvik även banala konstateranden som att man kan laga mat i köket eller umgås i vardagsrummet; beskriv vad som är unikt och säljande.
+- Fördela orden klokt inom 225 ord: korta hellre ned rumssektioner än geodata; ta alltid med området/kommunikation (geodata) med konkreta namn/avstånd/tider.
+- Rumssektioner ska vara korta; lägg hellre extra detaljer på läge, service, skolor/förskolor, kommunikationer och universitet/högskolor om de finns i geodata.
 - Total text: max 225 ord (alla sektioner tillsammans).
 - I område-sektionen: använd geodata/Transit för att nämna matbutiker, parker, träning, skolor/förskolor och kommunikationer (buss/tåg/tunnelbana) med uppskattade tider om de finns; undvik att konstatera självklarheter som att toaletten fyller sin funktion.
+- Använd geodata_summary nedan för att beskriva området med konkreta exempel (namn + avstånd/tider).
 - Respektera ton, målgrupp och detaljer i datan. Om något saknas: skriv professionellt och generellt utan att hitta på.
 Data:
 %s`
@@ -35,6 +41,9 @@ func BuildGenerationPrompts(listing storage.Listing) (string, string, error) {
 	}
 
 	userPrompt := fmt.Sprintf(userPromptTemplate, payload)
+	if geoLines := geodata.FormatPromptLines(listing.Insights.Geodata); geoLines != "" {
+		userPrompt = fmt.Sprintf("%s\n\nGeodata att använda i område/kommunikation:\n%s", userPrompt, geoLines)
+	}
 	if profile := FormatStyleProfile(listing.StyleProfile); profile != "" {
 		userPrompt = fmt.Sprintf("%s\n\n%s", userPrompt, profile)
 	}
@@ -64,6 +73,7 @@ func buildStructuredPayload(listing storage.Listing) (string, error) {
 		LivingArea     float64             `json:"living_area"`
 		Rooms          float64             `json:"rooms"`
 		Insights       storage.Insights    `json:"insights"`
+		GeodataSummary string              `json:"geodata_summary,omitempty"`
 		Details        storage.Details     `json:"details"`
 		Sections       []structuredSection `json:"sections"`
 		StyleProfileID string              `json:"style_profile_id"`
@@ -84,6 +94,7 @@ func buildStructuredPayload(listing storage.Listing) (string, error) {
 		LivingArea:     listing.LivingArea,
 		Rooms:          listing.Rooms,
 		Insights:       listing.Insights,
+		GeodataSummary: geodata.FormatSummary(listing.Insights.Geodata),
 		Details:        listing.Details,
 		StyleProfileID: strings.TrimSpace(listing.Details.Meta.StyleProfileID),
 		Sections: []structuredSection{

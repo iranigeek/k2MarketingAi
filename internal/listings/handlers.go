@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"k2MarketingAi/internal/auth"
 	"k2MarketingAi/internal/events"
 	"k2MarketingAi/internal/generation"
 	"k2MarketingAi/internal/geodata"
@@ -75,6 +76,26 @@ type uploadPayload struct {
 	contentType string
 }
 
+func currentUser(w http.ResponseWriter, r *http.Request) (storage.User, bool) {
+	user, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "logga in f\u00f6rst", http.StatusUnauthorized)
+		return storage.User{}, false
+	}
+	return user, true
+}
+
+func (h Handler) fetchListingForUser(ctx context.Context, id string, userID string) (storage.Listing, error) {
+	listing, err := h.Store.GetListing(ctx, id)
+	if err != nil {
+		return storage.Listing{}, err
+	}
+	if listing.OwnerID == "" || listing.OwnerID != userID {
+		return storage.Listing{}, storage.ErrNotFound
+	}
+	return listing, nil
+}
+
 // Create handles POST /api/listings.
 func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -82,6 +103,10 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 		upload *uploadPayload
 		err    error
 	)
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		req, upload, err = parseMultipartRequest(r)
@@ -146,6 +171,7 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	listing := storage.Listing{
+		OwnerID:        user.ID,
 		Address:        req.Address,
 		Neighborhood:   req.Neighborhood,
 		City:           req.City,
@@ -223,7 +249,11 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /api/listings.
 func (h Handler) List(w http.ResponseWriter, r *http.Request) {
-	listings, err := h.Store.ListListings(r.Context())
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+	listings, err := h.Store.ListListingsByOwner(r.Context(), user.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -242,13 +272,17 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get returns a single listing by id.
 func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
 
-	listing, err := h.Store.GetListing(r.Context(), id)
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
@@ -266,6 +300,10 @@ func (h Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // RewriteSection accepts instructions and rewrites a section using the generator.
 func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	slug := normalizeSlug(chi.URLParam(r, "slug"))
 	if id == "" || slug == "" {
@@ -281,7 +319,7 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listing, err := h.Store.GetListing(r.Context(), id)
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
@@ -352,6 +390,10 @@ func (h Handler) RewriteSection(w http.ResponseWriter, r *http.Request) {
 
 // UpdateSection saves manual edits for a section.
 func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	slug := normalizeSlug(chi.URLParam(r, "slug"))
 	if id == "" || slug == "" {
@@ -374,7 +416,7 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listing, err := h.Store.GetListing(r.Context(), id)
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
@@ -430,6 +472,10 @@ func (h Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
 
 // DeleteSection removes a section by slug.
 func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	slug := normalizeSlug(chi.URLParam(r, "slug"))
 	if id == "" || slug == "" {
@@ -437,7 +483,7 @@ func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listing, err := h.Store.GetListing(r.Context(), id)
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
@@ -482,13 +528,17 @@ func (h Handler) DeleteSection(w http.ResponseWriter, r *http.Request) {
 
 // ExportFullCopy returns the listing text in different formats (text/html).
 func (h Handler) ExportFullCopy(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
 
-	listing, err := h.Store.GetListing(r.Context(), id)
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
@@ -522,13 +572,18 @@ func (h Handler) ExportFullCopy(w http.ResponseWriter, r *http.Request) {
 
 // DeleteListing removes an entire listing.
 func (h Handler) DeleteListing(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.Store.DeleteListing(r.Context(), id); err != nil {
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
+	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
 			return
@@ -537,7 +592,16 @@ func (h Handler) DeleteListing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.publishDeletion(id)
+	if err := h.Store.DeleteListing(r.Context(), listing.ID); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.publishDeletion(listing.ID, listing.OwnerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -600,6 +664,10 @@ func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 
 // AttachImage wires an uploaded image to an existing listing.
 func (h Handler) AttachImage(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
@@ -623,7 +691,7 @@ func (h Handler) AttachImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listing, err := h.Store.GetListing(r.Context(), id)
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			http.NotFound(w, r)
@@ -675,6 +743,10 @@ func (h Handler) AttachImage(w http.ResponseWriter, r *http.Request) {
 
 // StreamEvents streams status updates over SSE.
 func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
 	if h.Events == nil {
 		http.Error(w, "event streaming disabled", http.StatusNotImplemented)
 		return
@@ -700,6 +772,9 @@ func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 		case evt, ok := <-ch:
 			if !ok {
 				return
+			}
+			if evt.OwnerID != "" && evt.OwnerID != user.ID {
+				continue
 			}
 			payload, err := json.Marshal(evt)
 			if err != nil {
@@ -1222,24 +1297,24 @@ func (h Handler) runPipeline(initial storage.Listing) {
 		if status.Vision == "" {
 			status.Vision = "skipped"
 			_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-			h.publishStatus(initial.ID, status)
+			h.publishStatus(initial.ID, initial.OwnerID, status)
 		}
 	} else if status.Vision != "completed" {
 		if h.Vision == nil {
 			status.Vision = "skipped"
 			_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-			h.publishStatus(initial.ID, status)
+			h.publishStatus(initial.ID, initial.OwnerID, status)
 		} else {
 			status.Vision = "in_progress"
 			_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-			h.publishStatus(initial.ID, status)
+			h.publishStatus(initial.ID, initial.OwnerID, status)
 
 			insights, err := h.Vision.Analyze(ctx, initial.ImageURL)
 			if err != nil {
 				log.Printf("vision analysis failed: %v", err)
 				status.Vision = "failed"
 				_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-				h.publishStatus(initial.ID, status)
+				h.publishStatus(initial.ID, initial.OwnerID, status)
 			} else {
 				listing.Insights.Vision = insights
 				status.Vision = "completed"
@@ -1247,7 +1322,7 @@ func (h Handler) runPipeline(initial storage.Listing) {
 				if err != nil {
 					log.Printf("store vision insights failed: %v", err)
 					_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-					h.publishStatus(initial.ID, status)
+					h.publishStatus(initial.ID, initial.OwnerID, status)
 				} else {
 					listing = updated
 					status = updated.Status
@@ -1260,26 +1335,26 @@ func (h Handler) runPipeline(initial storage.Listing) {
 	if status.Geodata != "completed" {
 		status.Geodata = "in_progress"
 		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-		h.publishStatus(initial.ID, status)
+		h.publishStatus(initial.ID, initial.OwnerID, status)
 		time.Sleep(1200 * time.Millisecond)
 		status.Geodata = "completed"
 		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-		h.publishStatus(initial.ID, status)
+		h.publishStatus(initial.ID, initial.OwnerID, status)
 	}
 
 	if status.Text != "completed" {
 		status.Text = "in_progress"
 		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-		h.publishStatus(initial.ID, status)
+		h.publishStatus(initial.ID, initial.OwnerID, status)
 		time.Sleep(800 * time.Millisecond)
 		status.Text = "completed"
 		_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-		h.publishStatus(initial.ID, status)
+		h.publishStatus(initial.ID, initial.OwnerID, status)
 	}
 
 	status.Data = "completed"
 	_ = h.Store.UpdateStatus(ctx, initial.ID, status)
-	h.publishStatus(initial.ID, status)
+	h.publishStatus(initial.ID, initial.OwnerID, status)
 }
 
 func (h Handler) publishListing(listing storage.Listing) {
@@ -1288,26 +1363,29 @@ func (h Handler) publishListing(listing storage.Listing) {
 	}
 	h.Events.Publish(events.Event{
 		ListingID: listing.ID,
+		OwnerID:   listing.OwnerID,
 		Status:    listing.Status,
 	})
 }
 
-func (h Handler) publishStatus(listingID string, status storage.Status) {
+func (h Handler) publishStatus(listingID, ownerID string, status storage.Status) {
 	if h.Events == nil {
 		return
 	}
 	h.Events.Publish(events.Event{
 		ListingID: listingID,
+		OwnerID:   ownerID,
 		Status:    status,
 	})
 }
 
-func (h Handler) publishDeletion(id string) {
+func (h Handler) publishDeletion(id, ownerID string) {
 	if h.Events == nil {
 		return
 	}
 	h.Events.Publish(events.Event{
 		ListingID: id,
+		OwnerID:   ownerID,
 		Status:    storage.Status{Data: "deleted"},
 	})
 }

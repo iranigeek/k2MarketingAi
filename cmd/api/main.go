@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
+	"k2MarketingAi/internal/auth"
 	"k2MarketingAi/internal/config"
 	"k2MarketingAi/internal/events"
 	"k2MarketingAi/internal/generation"
@@ -114,6 +115,20 @@ func main() {
 	}
 
 	eventBroker := events.NewBroker()
+	sessionManager := auth.SessionManager{
+		Secret:       []byte(cfg.Auth.Secret),
+		Duration:     time.Duration(cfg.Auth.SessionHours) * time.Hour,
+		CookieName:   cfg.Auth.CookieName,
+		SecureCookie: cfg.Auth.SecureCookie,
+	}
+	authHandler := auth.Handler{
+		Store:    store,
+		Sessions: sessionManager,
+	}
+	authMiddleware := auth.Middleware{
+		Store:    store,
+		Sessions: sessionManager,
+	}
 
 	listingHandler := listings.Handler{
 		Store:       store,
@@ -131,7 +146,7 @@ func main() {
 		Renderer: visionRenderer,
 		Imagen:   imagenRenderer,
 	}
-	srv := server.New(cfg.Port, listingHandler, visionHandler, staticFS)
+	srv := server.New(cfg.Port, authHandler, authMiddleware, listingHandler, visionHandler, staticFS)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

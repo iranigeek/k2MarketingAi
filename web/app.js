@@ -1,4 +1,6 @@
 const state = {
+    user: null,
+    authMode: 'login',
     listings: [],
     current: null,
     selectedId: null,
@@ -40,6 +42,168 @@ function listFromLines(raw) {
         .map(entry => entry.trim())
         .filter(Boolean);
 }
+
+function setUser(user) {
+    state.user = user;
+    const sidebarLabel = document.getElementById('user-email-sidebar');
+    if (sidebarLabel) {
+        sidebarLabel.textContent = user?.email || 'Inloggad';
+    }
+    document.body.classList.add('is-authenticated');
+}
+
+function resetAppData() {
+    state.listings = [];
+    state.current = null;
+    state.selectedId = null;
+    renderObjectList();
+    renderDetail();
+}
+
+function showAuthOverlay(message = 'Logga in för att fortsätta') {
+    const overlay = document.getElementById('auth-overlay');
+    const copy = document.getElementById('auth-copy');
+    if (copy) copy.textContent = message;
+    overlay?.classList.remove('hidden');
+}
+
+function hideAuthOverlay() {
+    document.getElementById('auth-overlay')?.classList.add('hidden');
+    clearAuthError();
+}
+
+function setAuthMode(mode) {
+    state.authMode = mode;
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const loginTab = document.getElementById('auth-toggle-login');
+    const registerTab = document.getElementById('auth-toggle-register');
+    loginForm?.classList.toggle('hidden', mode !== 'login');
+    registerForm?.classList.toggle('hidden', mode !== 'register');
+    loginTab?.classList.toggle('active', mode === 'login');
+    registerTab?.classList.toggle('active', mode === 'register');
+    clearAuthError();
+}
+
+function showAuthError(text) {
+    const el = document.getElementById('auth-error');
+    if (!el) return;
+    el.textContent = text || 'Något gick fel';
+    el.classList.remove('hidden');
+}
+
+function clearAuthError() {
+    const el = document.getElementById('auth-error');
+    if (!el) return;
+    el.textContent = '';
+    el.classList.add('hidden');
+}
+
+async function handleLoginSubmit(e) {
+    e.preventDefault();
+    clearAuthError();
+    const email = document.getElementById('login-email')?.value.trim();
+    const password = document.getElementById('login-password')?.value;
+    if (!email || !password) {
+        showAuthError('Fyll i e-post och lösenord');
+        return;
+    }
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+            const msg = await res.text();
+            showAuthError(msg || 'Felaktiga uppgifter');
+            return;
+        }
+        const user = await res.json();
+        setUser(user);
+        hideAuthOverlay();
+        await initApp();
+    } catch (err) {
+        showAuthError('Kunde inte logga in just nu');
+        console.error(err);
+    }
+}
+
+async function handleRegisterSubmit(e) {
+    e.preventDefault();
+    clearAuthError();
+    const email = document.getElementById('register-email')?.value.trim();
+    const password = document.getElementById('register-password')?.value;
+    if (!email || !password) {
+        showAuthError('Fyll i e-post och lösenord');
+        return;
+    }
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+            const msg = await res.text();
+            showAuthError(msg || 'Kunde inte skapa konto');
+            return;
+        }
+        const user = await res.json();
+        setUser(user);
+        hideAuthOverlay();
+        await initApp();
+    } catch (err) {
+        showAuthError('Kunde inte skapa konto just nu');
+        console.error(err);
+    }
+}
+
+async function handleLogout() {
+    try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+        console.warn('logout failed', err);
+    }
+    state.user = null;
+    const sidebarLabel = document.getElementById('user-email-sidebar');
+    if (sidebarLabel) sidebarLabel.textContent = 'Ej inloggad';
+    resetAppData();
+    showAuthOverlay('Du är utloggad.');
+}
+
+async function checkSession() {
+    try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+            const user = await res.json();
+            setUser(user);
+            hideAuthOverlay();
+            await initApp();
+            return;
+        }
+    } catch (err) {
+        console.warn('Session check failed', err);
+    }
+    showAuthOverlay();
+}
+
+function handleUnauthorized(message) {
+    state.user = null;
+    const sidebarLabel = document.getElementById('user-email-sidebar');
+    if (sidebarLabel) sidebarLabel.textContent = 'Ej inloggad';
+    resetAppData();
+    showAuthOverlay(message);
+}
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+    const res = await nativeFetch(input, { credentials: 'same-origin', ...init });
+    if (res.status === 401) {
+        handleUnauthorized('Sessionen har gått ut. Logga in igen.');
+    }
+    return res;
+};
 
 async function fetchListings() {
     try {
@@ -816,6 +980,11 @@ function bindEvents() {
     const form = document.getElementById('listing-form');
     form.addEventListener('submit', handleCreate);
     document.getElementById('property-type').addEventListener('change', toggleFloorField);
+    document.getElementById('auth-toggle-login')?.addEventListener('click', () => setAuthMode('login'));
+    document.getElementById('auth-toggle-register')?.addEventListener('click', () => setAuthMode('register'));
+    document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
+    document.getElementById('register-form')?.addEventListener('submit', handleRegisterSubmit);
+    document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
 
     document.querySelectorAll('.selection-action').forEach(btn => {
         btn.addEventListener('click', () => applySelectionRewrite(btn.dataset.mode));
@@ -1657,9 +1826,10 @@ function updateImageStats() {
 bindEvents();
 renderVisionLab();
 showView('objects');
-initApp();
+checkSession();
 
 async function initApp() {
+    if (!state.user) return;
     await fetchStyleProfiles();
     await fetchListings();
 }

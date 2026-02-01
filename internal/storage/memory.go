@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +15,8 @@ type InMemoryStore struct {
 	mu            sync.RWMutex
 	listings      []Listing
 	styleProfiles map[string]StyleProfile
+	users         map[string]User
+	emailIndex    map[string]string
 }
 
 // NewInMemoryStore constructs an empty in-memory store.
@@ -20,6 +24,8 @@ func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		listings:      make([]Listing, 0),
 		styleProfiles: make(map[string]StyleProfile),
+		users:         make(map[string]User),
+		emailIndex:    make(map[string]string),
 	}
 }
 
@@ -63,6 +69,20 @@ func (s *InMemoryStore) ListListings(_ context.Context) ([]Listing, error) {
 	snapshot := make([]Listing, len(s.listings))
 	copy(snapshot, s.listings)
 	return snapshot, nil
+}
+
+// ListListingsByOwner returns listings belonging to the provided owner.
+func (s *InMemoryStore) ListListingsByOwner(_ context.Context, ownerID string) ([]Listing, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var results []Listing
+	for _, l := range s.listings {
+		if l.OwnerID == ownerID {
+			results = append(results, l)
+		}
+	}
+	return results, nil
 }
 
 // ListAllListings returns the same snapshot as ListListings for the in-memory store.
@@ -205,4 +225,53 @@ func (s *InMemoryStore) GetStyleProfile(_ context.Context, id string) (StyleProf
 		return StyleProfile{}, ErrNotFound
 	}
 	return profile, nil
+}
+
+// CreateUser stores a new user in memory.
+func (s *InMemoryStore) CreateUser(_ context.Context, user User) (User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	email := strings.ToLower(strings.TrimSpace(user.Email))
+	if email == "" {
+		return User{}, fmt.Errorf("email is required")
+	}
+	if _, exists := s.emailIndex[email]; exists {
+		return User{}, ErrUserExists
+	}
+	if user.ID == "" {
+		user.ID = uuid.NewString()
+	}
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = time.Now()
+	}
+	user.Email = email
+	s.users[user.ID] = user
+	s.emailIndex[email] = user.ID
+	return user, nil
+}
+
+// GetUserByEmail fetches a user using their email.
+func (s *InMemoryStore) GetUserByEmail(_ context.Context, email string) (User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	id, ok := s.emailIndex[strings.ToLower(strings.TrimSpace(email))]
+	if !ok {
+		return User{}, ErrNotFound
+	}
+	user := s.users[id]
+	return user, nil
+}
+
+// GetUserByID fetches a user using their ID.
+func (s *InMemoryStore) GetUserByID(_ context.Context, id string) (User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	user, ok := s.users[id]
+	if !ok {
+		return User{}, ErrNotFound
+	}
+	return user, nil
 }

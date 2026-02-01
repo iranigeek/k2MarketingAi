@@ -8,8 +8,9 @@ import (
 
 // Event describes a status update for a listing.
 type Event struct {
-	ListingID string          `json:"listing_id"`
-	Status    storage.Status  `json:"status"`
+	ListingID string         `json:"listing_id"`
+	OwnerID   string         `json:"owner_id,omitempty"`
+	Status    storage.Status `json:"status"`
 }
 
 // Broker manages SSE subscribers.

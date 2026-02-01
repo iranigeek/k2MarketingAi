@@ -8,7 +8,10 @@
 </head>
 <body class="sidebar-open view-objects">
     <aside class="sidebar">
-        <div class="sidebar__brand">BA</div>
+        <div class="sidebar__brand">
+            <div class="sidebar__brand-email" id="user-email-sidebar">Ej inloggad</div>
+            <button class="ghost sidebar__logout" id="logout-btn" type="button">Logga ut</button>
+        </div>
         <nav>
             <a class="sidebar__item active" href="#" data-view="objects">
                 <span class="icon">📂</span>
@@ -466,6 +469,39 @@
                     <p class="muted">Inga sparade stilprofiler ännu.</p>
                 </div>
             </section>
+        </div>
+    </div>
+
+    <div id="auth-overlay" class="auth-overlay hidden" role="dialog" aria-modal="true">
+        <div class="auth-card">
+            <div class="auth-switch">
+                <button id="auth-toggle-login" class="auth-switch__tab active" type="button">Logga in</button>
+                <button id="auth-toggle-register" class="auth-switch__tab" type="button">Skapa konto</button>
+            </div>
+            <p id="auth-copy" class="muted">Logga in för att se dina objekt.</p>
+            <p id="auth-error" class="auth-error hidden" role="alert"></p>
+            <form id="login-form" class="auth-form">
+                <div class="field">
+                    <label for="login-email">E-post</label>
+                    <input id="login-email" type="email" autocomplete="email" required placeholder="du@example.com">
+                </div>
+                <div class="field">
+                    <label for="login-password">Lösenord</label>
+                    <input id="login-password" type="password" autocomplete="current-password" required placeholder="••••••••">
+                </div>
+                <button class="primary full-width" type="submit">Logga in</button>
+            </form>
+            <form id="register-form" class="auth-form hidden">
+                <div class="field">
+                    <label for="register-email">E-post</label>
+                    <input id="register-email" type="email" autocomplete="email" required placeholder="du@example.com">
+                </div>
+                <div class="field">
+                    <label for="register-password">Lösenord</label>
+                    <input id="register-password" type="password" autocomplete="new-password" required placeholder="Minst 6 tecken">
+                </div>
+                <button class="secondary full-width" type="submit">Skapa konto</button>
+            </form>
         </div>
     </div>
 

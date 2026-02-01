@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
+	"k2MarketingAi/internal/geodata"
 	"k2MarketingAi/internal/llm"
 	"k2MarketingAi/internal/prompts"
 	"k2MarketingAi/internal/storage"
@@ -76,13 +78,11 @@ func buildFullAd(listing storage.Listing) string {
 	if len(points) > 0 {
 		fmt.Fprintf(&b, " Nycklar: %s.", strings.Join(points, "; "))
 	}
-	if geo := listing.Insights.Geodata; len(geo.PointsOfInterest) > 0 || len(geo.Transit) > 0 {
-		if summary := joinGeoInsights(geo); strings.TrimSpace(summary) != "" {
-			fmt.Fprintf(&b, " Område: %s.", summary)
-		}
+	if summary := geodata.FormatSummary(listing.Insights.Geodata); strings.TrimSpace(summary) != "" {
+		fmt.Fprintf(&b, " Område: %s", ensurePeriod(summary))
 	}
 
-	return strings.TrimSpace(b.String())
+	return sanitizeContent(strings.TrimSpace(b.String()))
 }
 
 func (heuristicGenerator) Rewrite(_ context.Context, listing storage.Listing, section storage.Section, instruction string) (storage.Section, error) {
@@ -92,6 +92,7 @@ func (heuristicGenerator) Rewrite(_ context.Context, listing storage.Listing, se
 	}
 
 	section.Content = ApplyLocalRewrite(base, instruction)
+	section.Content = sanitizeContent(section.Content)
 	return section, nil
 }
 
@@ -120,50 +121,10 @@ func buildLivingCopy(listing storage.Listing) string {
 }
 
 func buildAreaCopy(listing storage.Listing) string {
-	geo := listing.Insights.Geodata
-	if len(geo.PointsOfInterest) == 0 && len(geo.Transit) == 0 {
-		return "Området erbjuder närhet till vardagens alla måsten – service, grönområden och kommunikationer inom bekvämt gångavstånd."
+	if summary := geodata.FormatSummary(listing.Insights.Geodata); summary != "" {
+		return sanitizeContent(summary)
 	}
-
-	grouped := map[string][]string{}
-	for _, poi := range geo.PointsOfInterest {
-		key := categorizePOI(poi.Category)
-		entry := fmt.Sprintf("%s (%s)", poi.Name, poi.Distance)
-		grouped[key] = append(grouped[key], entry)
-	}
-
-	var sentences []string
-	if names := summarizeList(grouped["grocery"], 2); names != "" {
-		sentences = append(sentences, fmt.Sprintf("Matbutiker som %s ligger bara några minuter bort.", names))
-	}
-	if names := summarizeList(append(grouped["restaurant"], grouped["cafe"]...), 2); names != "" {
-		sentences = append(sentences, fmt.Sprintf("I kvarteret väntar restauranger och caféer som %s.", names))
-	}
-	if names := summarizeList(grouped["school"], 2); names != "" {
-		sentences = append(sentences, fmt.Sprintf("Skolor och förskolor i närheten: %s.", names))
-	}
-	if names := summarizeList(grouped["park"], 2); names != "" {
-		sentences = append(sentences, fmt.Sprintf("För rekreation finns gröna platser som %s.", names))
-	}
-	if names := summarizeList(grouped["gym"], 1); names != "" {
-		sentences = append(sentences, fmt.Sprintf("Den som vill träna gör det enkelt på %s.", names))
-	}
-
-	if len(geo.Transit) > 0 {
-		var highlights []string
-		for i := 0; i < len(geo.Transit) && i < 2; i++ {
-			highlights = append(highlights, fmt.Sprintf("%s (%s)", geo.Transit[i].Mode, geo.Transit[i].Description))
-		}
-		if summary := summarizeList(highlights, len(highlights)); summary != "" {
-			sentences = append(sentences, fmt.Sprintf("Kommunikationerna är utmärkta med %s.", summary))
-		}
-	}
-
-	if len(sentences) == 0 {
-		return "Området erbjuder närhet till vardagens alla måsten – service, grönområden och kommunikationer inom bekvämt gångavstånd."
-	}
-
-	return strings.Join(sentences, " ")
+	return "Området erbjuder närhet till vardagens alla måsten – service, grönområden och kommunikationer inom bekvämt gångavstånd."
 }
 
 func emphasizeInstruction(target string) string {
@@ -200,6 +161,21 @@ func describeRooms(rooms float64, area float64) string {
 	}
 }
 
+func ensurePeriod(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ""
+	}
+	switch {
+	case strings.HasSuffix(trimmed, "."):
+		return trimmed
+	case strings.HasSuffix(trimmed, "!"), strings.HasSuffix(trimmed, "?"):
+		return trimmed
+	default:
+		return trimmed + "."
+	}
+}
+
 func formatRooms(rooms float64) string {
 	if rooms == 0 {
 		return ""
@@ -208,39 +184,6 @@ func formatRooms(rooms float64) string {
 		return fmt.Sprintf("%d", int(rooms))
 	}
 	return fmt.Sprintf("%.1f", rooms)
-}
-
-func categorizePOI(category string) string {
-	switch strings.ToLower(category) {
-	case "matbutik", "butik":
-		return "grocery"
-	case "restaurang":
-		return "restaurant"
-	case "café":
-		return "cafe"
-	case "park":
-		return "park"
-	case "gym":
-		return "gym"
-	case "skola", "förskola", "forskola":
-		return "school"
-	default:
-		return "other"
-	}
-}
-
-func summarizeList(items []string, limit int) string {
-	if len(items) == 0 {
-		return ""
-	}
-	if limit > 0 && len(items) > limit {
-		items = items[:limit]
-	}
-	if len(items) == 1 {
-		return items[0]
-	}
-	last := items[len(items)-1]
-	return fmt.Sprintf("%s och %s", strings.Join(items[:len(items)-1], ", "), last)
 }
 
 func ApplyLocalRewrite(base, instruction string) string {
@@ -359,6 +302,9 @@ func (g *llmGenerator) Rewrite(ctx context.Context, listing storage.Listing, sec
 - Undvik klyschor och överdrifter.
 - Behåll fakta men gör texten mer målande och säljande.
 - Hoppa över självklara basfunktioner och beskriv inte vad man gör i rummen.
+- Nämn aldrig att toaletten fyller sin funktion.
+- Undvik banala konstateranden som att man lagar mat i köket eller umgås i vardagsrummet; lyft det som är unikt och säljande.
+- Håll rumssektioner korta; om geodata finns, låt området/kommunikationen ta plats.
 - Skriv kortfattat, rakt och ta bara med det som är viktigt för boendet.
 - Matcha ursprunglig längd (minst 85 % av originalet) eller gör den något längre.
 - Följ kundens stilprofil om den finns.
@@ -370,7 +316,8 @@ Originalets längd: %d ord (matcha denna längd, ±15%%)
 Mäklarens instruktion: "%s"
 Sektionens syfte: %s
 Geodata: %s
-`, section.Title, section.Slug, section.Content, originalWords, instruction, guideline, joinGeoInsights(listing.Insights.Geodata))
+Ta bort självklarheter (ingen text om att "umgås i vardagsrum", "laga mat i kök" eller att toalett/badrum fyller basfunktioner). Prioritera geodata/kommunikation och konkreta säljdetaljer; korta ned rumsbeskrivningar hellre än att ta bort geodata.
+`, section.Title, section.Slug, section.Content, originalWords, instruction, guideline, geodata.FormatPromptLines(listing.Insights.Geodata))
 	if profile := prompts.FormatStyleProfile(listing.StyleProfile); profile != "" {
 		userPrompt = fmt.Sprintf(`%s
 
@@ -412,14 +359,14 @@ func parseSections(content string) ([]storage.Section, error) {
 		Sections []storage.Section `json:"sections"`
 	}
 	if err := json.Unmarshal([]byte(content), &envelope); err == nil && len(envelope.Sections) > 0 {
-		return envelope.Sections, nil
+		return sanitizeSections(envelope.Sections), nil
 	}
 
 	start := strings.Index(content, "{")
 	end := strings.LastIndex(content, "}")
 	if start >= 0 && end > start {
 		if err := json.Unmarshal([]byte(content[start:end+1]), &envelope); err == nil && len(envelope.Sections) > 0 {
-			return envelope.Sections, nil
+			return sanitizeSections(envelope.Sections), nil
 		}
 	}
 	return nil, fmt.Errorf("could not parse sections from response")
@@ -446,7 +393,7 @@ func parseSection(content string, fallback storage.Section) (storage.Section, er
 		fallback.Title = resp.Title
 	}
 	if resp.Content != "" {
-		fallback.Content = resp.Content
+		fallback.Content = sanitizeContent(resp.Content)
 	}
 	return fallback, nil
 }
@@ -485,6 +432,9 @@ func (g *llmGenerator) generatePremiumAd(ctx context.Context, listing storage.Li
 - Variera språk, meningslängd och struktur i varje text.
 - Anpassa ton och ordval efter målgruppen i datan.
 - Undvik återkommande klyschor; texten ska kännas skriven av en människa.
+- Nämn aldrig att toaletten fyller sin funktion eller andra självklarheter om badrum/toalett.
+- Undvik att konstatera självklara saker som att köket används för matlagning eller vardagsrummet för umgänge – fokusera på det som är attraktivt och särskiljande.
+- Håll dig till maximalt 225 ord och använd dem på säljande fakta, geodata och kvaliteter – ingen utfyllnad; korta hellre ned rumssektioner än geodata/kommunikation. Om geodata innehåller service/skola/universitet/pendel, lyft det.
 - Presentera bostaden i ett sammanhållet flöde och avsluta gärna med en kort varierad punktlista.`
 
 	userPrompt := fmt.Sprintf(`Skapa en unik bostadsannons baserat på JSON-datan nedan.
@@ -505,7 +455,7 @@ Data:
 		return "", err
 	}
 
-	return strings.TrimSpace(content), nil
+	return sanitizeContent(strings.TrimSpace(content)), nil
 }
 
 func desiredWordCount(meta storage.MetaInfo) int {
@@ -518,63 +468,57 @@ func desiredWordCount(meta storage.MetaInfo) int {
 	return 150
 }
 
-func joinGeoInsights(geo storage.GeodataInsights) string {
-	if len(geo.PointsOfInterest) == 0 && len(geo.Transit) == 0 {
-		return ""
-	}
-
-	var parts []string
-	if len(geo.PointsOfInterest) > 0 {
-		var poiSummaries []string
-		for _, poi := range geo.PointsOfInterest {
-			name := strings.TrimSpace(poi.Name)
-			category := strings.TrimSpace(poi.Category)
-			distance := strings.TrimSpace(poi.Distance)
-
-			var poiParts []string
-			if name != "" {
-				poiParts = append(poiParts, name)
-			}
-			if category != "" {
-				poiParts = append(poiParts, strings.ToLower(category))
-			}
-			if distance != "" {
-				poiParts = append(poiParts, distance)
-			}
-
-			if summary := strings.Join(poiParts, ", "); summary != "" {
-				poiSummaries = append(poiSummaries, summary)
-			}
-		}
-		if len(poiSummaries) > 0 {
-			parts = append(parts, fmt.Sprintf("POI: %s", strings.Join(poiSummaries, "; ")))
-		}
-	}
-
-	if len(geo.Transit) > 0 {
-		var transitSummaries []string
-		for _, transit := range geo.Transit {
-			mode := strings.TrimSpace(transit.Mode)
-			desc := strings.TrimSpace(transit.Description)
-
-			switch {
-			case mode != "" && desc != "":
-				transitSummaries = append(transitSummaries, fmt.Sprintf("%s (%s)", mode, desc))
-			case desc != "":
-				transitSummaries = append(transitSummaries, desc)
-			case mode != "":
-				transitSummaries = append(transitSummaries, mode)
-			}
-		}
-		if len(transitSummaries) > 0 {
-			parts = append(parts, fmt.Sprintf("Transit: %s", strings.Join(transitSummaries, "; ")))
-		}
-	}
-
-	return strings.Join(parts, " | ")
-}
-
 func countWords(text string) int {
 	fields := strings.Fields(text)
 	return len(fields)
+}
+
+func sanitizeSections(sections []storage.Section) []storage.Section {
+	for i := range sections {
+		sections[i].Content = sanitizeContent(sections[i].Content)
+	}
+	return sections
+}
+
+func sanitizeContent(text string) string {
+	phrase := "Köket är praktiskt utformat för vardagens behov och badrummet följer bostadens funktionella standard."
+	lower := strings.ToLower(text)
+	lowerPhrase := strings.ToLower(phrase)
+	for {
+		idx := strings.Index(lower, lowerPhrase)
+		if idx < 0 {
+			break
+		}
+		text = text[:idx] + text[idx+len(phrase):]
+		lower = strings.ToLower(text)
+	}
+	// Trim spaces per line to keep intentional line breaks.
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = strings.Join(strings.Fields(line), " ")
+	}
+	clean := strings.TrimSpace(strings.Join(lines, "\n"))
+	return addParagraphBreaks(clean)
+}
+
+var sentenceBreakRegex = regexp.MustCompile(`([.!?])\s+([A-ZÅÄÖ])`)
+
+// addParagraphBreaks inserts blank lines sparsely (every second sentence break) without changing wording.
+func addParagraphBreaks(text string) string {
+	count := 0
+	return sentenceBreakRegex.ReplaceAllStringFunc(text, func(match string) string {
+		count++
+		if len(match) == 0 {
+			return match
+		}
+		punct := string(match[0])
+		rest := strings.TrimSpace(match[1:])
+		if rest == "" {
+			return match
+		}
+		if count%2 == 0 {
+			return punct + "\n\n" + rest
+		}
+		return punct + " " + rest
+	})
 }

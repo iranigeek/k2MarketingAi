@@ -13,6 +13,7 @@ type Config struct {
 	Media       MediaConfig   `json:"media"`
 	Geodata     GeodataConfig `json:"geodata"`
 	AI          AIConfig      `json:"ai"`
+	Auth        AuthConfig    `json:"auth"`
 }
 
 // MediaConfig describes S3/media related configuration.
@@ -62,6 +63,14 @@ type ImagenConfig struct {
 	ServiceAccountJSON string `json:"service_account_json"`
 }
 
+// AuthConfig controls session management and security.
+type AuthConfig struct {
+	Secret       string `json:"secret"`
+	CookieName   string `json:"cookie_name"`
+	SessionHours int    `json:"session_hours"`
+	SecureCookie bool   `json:"secure_cookie"`
+}
+
 // Load reads configuration from the provided JSON file.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
@@ -102,5 +111,14 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.AI.Imagen.Model == "" {
 		cfg.AI.Imagen.Model = "image-generation@006"
+	}
+	if cfg.Auth.CookieName == "" {
+		cfg.Auth.CookieName = "session_token"
+	}
+	if cfg.Auth.SessionHours <= 0 {
+		cfg.Auth.SessionHours = 24 * 7
+	}
+	if cfg.Auth.Secret == "" {
+		cfg.Auth.Secret = "dev-secret-change-me"
 	}
 }

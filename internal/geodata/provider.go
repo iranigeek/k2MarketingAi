@@ -310,16 +310,21 @@ func mapGoogleCategory(types []string) string {
 		Type string
 		Name string
 	}{
-		{"cafe", "Café"},
+		{"cafe", "Caf?"},
 		{"restaurant", "Restaurang"},
 		{"park", "Park"},
 		{"gym", "Gym"},
 		{"supermarket", "Matbutik"},
 		{"grocery_or_supermarket", "Matbutik"},
+		{"shopping_mall", "Butik"},
+		{"store", "Butik"},
+		{"pharmacy", "Apotek"},
+		{"hospital", "Sjukhus"},
+		{"gas_station", "Bensinstation"},
+		{"parking", "Parkering"},
 		{"school", "Skola"},
 		{"primary_school", "Skola"},
 		{"secondary_school", "Skola"},
-		{"store", "Butik"},
 	}
 
 	for _, mapping := range categories {

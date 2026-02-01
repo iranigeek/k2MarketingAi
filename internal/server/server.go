@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"k2MarketingAi/internal/auth"
 	"k2MarketingAi/internal/listings"
 	"k2MarketingAi/internal/vision"
 )
@@ -18,12 +19,13 @@ const (
 )
 
 // New constructs the HTTP server with routes and middleware.
-func New(port string, listingHandler listings.Handler, visionHandler vision.Handler, staticFS http.Handler) *http.Server {
+func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, listingHandler listings.Handler, visionHandler vision.Handler, staticFS http.Handler) *http.Server {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
+	router.Use(authMiddleware.InjectUser)
 
 	router.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -31,29 +33,39 @@ func New(port string, listingHandler listings.Handler, visionHandler vision.Hand
 	})
 
 	router.Route("/api", func(r chi.Router) {
-		r.Post("/uploads", listingHandler.UploadMedia)
-		r.Route("/listings", func(r chi.Router) {
-			r.Get("/", listingHandler.List)
-			r.Post("/", listingHandler.Create)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", listingHandler.Get)
-				r.Post("/images", listingHandler.AttachImage)
-				r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
-				r.Patch("/sections/{slug}", listingHandler.UpdateSection)
-				r.Delete("/sections/{slug}", listingHandler.DeleteSection)
-				r.Get("/export", listingHandler.ExportFullCopy)
-				r.Delete("/", listingHandler.DeleteListing)
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/register", authHandler.Register)
+			r.Post("/login", authHandler.Login)
+			r.Post("/logout", authHandler.Logout)
+			r.Get("/me", authHandler.Me)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireAuth)
+			r.Post("/uploads", listingHandler.UploadMedia)
+			r.Route("/listings", func(r chi.Router) {
+				r.Get("/", listingHandler.List)
+				r.Post("/", listingHandler.Create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", listingHandler.Get)
+					r.Post("/images", listingHandler.AttachImage)
+					r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
+					r.Patch("/sections/{slug}", listingHandler.UpdateSection)
+					r.Delete("/sections/{slug}", listingHandler.DeleteSection)
+					r.Get("/export", listingHandler.ExportFullCopy)
+					r.Delete("/", listingHandler.DeleteListing)
+				})
 			})
-		})
-		r.Route("/style-profiles", func(r chi.Router) {
-			r.Get("/", listingHandler.ListStyleProfiles)
-			r.Post("/", listingHandler.SaveStyleProfile)
-		})
-		r.Get("/events", listingHandler.StreamEvents)
-		r.Route("/vision", func(r chi.Router) {
-			r.Post("/analyze", visionHandler.Analyze)
-			r.Post("/design", visionHandler.Design)
-			r.Post("/render", visionHandler.Render)
+			r.Route("/style-profiles", func(r chi.Router) {
+				r.Get("/", listingHandler.ListStyleProfiles)
+				r.Post("/", listingHandler.SaveStyleProfile)
+			})
+			r.Get("/events", listingHandler.StreamEvents)
+			r.Route("/vision", func(r chi.Router) {
+				r.Post("/analyze", visionHandler.Analyze)
+				r.Post("/design", visionHandler.Design)
+				r.Post("/render", visionHandler.Render)
+			})
 		})
 	})
 

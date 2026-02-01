@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,6 +19,8 @@ import (
 type PostgresStore struct {
 	pool *pgxpool.Pool
 }
+
+const listingColumns = "id, owner_id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at"
 
 // CreateListing stores the provided listing in PostgreSQL.
 func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listing, error) {
@@ -50,8 +53,8 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 	}
 
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO listings (id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-		input.ID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.Fee, input.LivingArea, input.Rooms, sectionsJSON, input.FullCopy, historyJSON, statusJSON, detailsJSON, insightsJSON, input.CreatedAt); err != nil {
+		`INSERT INTO listings (id, owner_id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		input.ID, input.OwnerID, input.Address, input.Tone, input.TargetAudience, input.Highlights, input.ImageURL, input.Fee, input.LivingArea, input.Rooms, sectionsJSON, input.FullCopy, historyJSON, statusJSON, detailsJSON, insightsJSON, input.CreatedAt); err != nil {
 		return Listing{}, fmt.Errorf("insert listing: %w", err)
 	}
 
@@ -60,12 +63,17 @@ func (s *PostgresStore) CreateListing(ctx context.Context, input Listing) (Listi
 
 // ListListings returns a slice of the most recent listings.
 func (s *PostgresStore) ListListings(ctx context.Context) ([]Listing, error) {
-	return s.fetchListings(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings ORDER BY created_at DESC LIMIT 50`)
+	return s.fetchListings(ctx, `SELECT `+listingColumns+` FROM listings ORDER BY created_at DESC LIMIT 50`)
+}
+
+// ListListingsByOwner returns recent listings for a specific owner.
+func (s *PostgresStore) ListListingsByOwner(ctx context.Context, ownerID string) ([]Listing, error) {
+	return s.fetchListings(ctx, `SELECT `+listingColumns+` FROM listings WHERE owner_id=$1 ORDER BY created_at DESC LIMIT 50`, ownerID)
 }
 
 // ListAllListings returns every stored listing (used for dataset exports).
 func (s *PostgresStore) ListAllListings(ctx context.Context) ([]Listing, error) {
-	return s.fetchListings(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings ORDER BY created_at DESC`)
+	return s.fetchListings(ctx, `SELECT `+listingColumns+` FROM listings ORDER BY created_at DESC`)
 }
 
 func (s *PostgresStore) fetchListings(ctx context.Context, query string, args ...any) ([]Listing, error) {
@@ -95,7 +103,7 @@ func (s *PostgresStore) Close() {
 
 // GetListing fetches a single listing by ID.
 func (s *PostgresStore) GetListing(ctx context.Context, id string) (Listing, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at FROM listings WHERE id=$1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT `+listingColumns+` FROM listings WHERE id=$1`, id)
 	item, err := scanListing(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -123,7 +131,7 @@ func (s *PostgresStore) UpdateListingSections(ctx context.Context, id string, se
 		return Listing{}, fmt.Errorf("marshal status: %w", err)
 	}
 
-	row := s.pool.QueryRow(ctx, `UPDATE listings SET sections=$2, full_copy=$3, section_history=$4, pipeline_status=$5 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at`, id, payload, fullCopy, historyJSON, statusJSON)
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET sections=$2, full_copy=$3, section_history=$4, pipeline_status=$5 WHERE id=$1 RETURNING `+listingColumns, id, payload, fullCopy, historyJSON, statusJSON)
 	item, scanErr := scanListing(row)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
@@ -141,7 +149,7 @@ func (s *PostgresStore) UpdateListingDetails(ctx context.Context, id string, det
 		return Listing{}, fmt.Errorf("marshal details: %w", err)
 	}
 
-	row := s.pool.QueryRow(ctx, `UPDATE listings SET details=$2, image_url=$3 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at`, id, payload, imageURL)
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET details=$2, image_url=$3 WHERE id=$1 RETURNING `+listingColumns, id, payload, imageURL)
 	item, scanErr := scanListing(row)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
@@ -164,7 +172,7 @@ func (s *PostgresStore) UpdateInsights(ctx context.Context, id string, insights 
 		return Listing{}, fmt.Errorf("marshal status: %w", err)
 	}
 
-	row := s.pool.QueryRow(ctx, `UPDATE listings SET insights=$2, pipeline_status=$3 WHERE id=$1 RETURNING id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at`, id, insightsJSON, statusJSON)
+	row := s.pool.QueryRow(ctx, `UPDATE listings SET insights=$2, pipeline_status=$3 WHERE id=$1 RETURNING `+listingColumns, id, insightsJSON, statusJSON)
 	item, scanErr := scanListing(row)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
@@ -278,6 +286,37 @@ func (s *PostgresStore) GetStyleProfile(ctx context.Context, id string) (StylePr
 	return profile, nil
 }
 
+// CreateUser stores a new user account.
+func (s *PostgresStore) CreateUser(ctx context.Context, user User) (User, error) {
+	if user.ID == "" {
+		user.ID = uuid.NewString()
+	}
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = time.Now()
+	}
+	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
+	if _, err := s.pool.Exec(ctx, `INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)`, user.ID, user.Email, user.PasswordHash, user.CreatedAt); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return User{}, ErrUserExists
+		}
+		return User{}, fmt.Errorf("insert user: %w", err)
+	}
+	return user, nil
+}
+
+// GetUserByEmail fetches a user by their email address.
+func (s *PostgresStore) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, created_at FROM users WHERE email=$1`, strings.ToLower(strings.TrimSpace(email)))
+	return scanUser(row)
+}
+
+// GetUserByID fetches a user by ID.
+func (s *PostgresStore) GetUserByID(ctx context.Context, id string) (User, error) {
+	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, created_at FROM users WHERE id=$1`, id)
+	return scanUser(row)
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -285,6 +324,7 @@ type rowScanner interface {
 func scanListing(row rowScanner) (Listing, error) {
 	var (
 		item         Listing
+		ownerID      sql.NullString
 		imageURL     sql.NullString
 		fee          sql.NullInt64
 		livingArea   sql.NullFloat64
@@ -296,8 +336,11 @@ func scanListing(row rowScanner) (Listing, error) {
 		detailsJSON  []byte
 		insightsJSON []byte
 	)
-	if err := row.Scan(&item.ID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &fee, &livingArea, &rooms, &sectionsJSON, &fullCopy, &historyJSON, &statusJSON, &detailsJSON, &insightsJSON, &item.CreatedAt); err != nil {
+	if err := row.Scan(&item.ID, &ownerID, &item.Address, &item.Tone, &item.TargetAudience, &item.Highlights, &imageURL, &fee, &livingArea, &rooms, &sectionsJSON, &fullCopy, &historyJSON, &statusJSON, &detailsJSON, &insightsJSON, &item.CreatedAt); err != nil {
 		return Listing{}, fmt.Errorf("scan listing: %w", err)
+	}
+	if ownerID.Valid {
+		item.OwnerID = ownerID.String
 	}
 	if imageURL.Valid {
 		item.ImageURL = imageURL.String
@@ -363,4 +406,15 @@ func scanStyleProfile(row rowScanner) (StyleProfile, error) {
 		profile.LastTrainedAt = &t
 	}
 	return profile, nil
+}
+
+func scanUser(row rowScanner) (User, error) {
+	var user User
+	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return User{}, ErrNotFound
+		}
+		return User{}, fmt.Errorf("scan user: %w", err)
+	}
+	return user, nil
 }

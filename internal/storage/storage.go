@@ -12,9 +12,13 @@ import (
 // ErrNotFound indicates that a listing could not be located in the backing store.
 var ErrNotFound = errors.New("listing not found")
 
+// ErrUserExists indicates that a user already exists with the given unique value.
+var ErrUserExists = errors.New("user already exists")
+
 // Listing represents the metadata and generated insights for a real estate listing.
 type Listing struct {
 	ID             string        `json:"id"`
+	OwnerID        string        `json:"owner_id,omitempty"`
 	Address        string        `json:"address"`
 	Neighborhood   string        `json:"neighborhood,omitempty"`
 	City           string        `json:"city,omitempty"`
@@ -220,10 +224,19 @@ type StyleProfile struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+// User represents an authenticated account that owns listings.
+type User struct {
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // Store defines the persistence behaviors the application relies on.
 type Store interface {
 	CreateListing(ctx context.Context, input Listing) (Listing, error)
 	ListListings(ctx context.Context) ([]Listing, error)
+	ListListingsByOwner(ctx context.Context, ownerID string) ([]Listing, error)
 	ListAllListings(ctx context.Context) ([]Listing, error)
 	GetListing(ctx context.Context, id string) (Listing, error)
 	UpdateListingSections(ctx context.Context, id string, sections []Section, fullCopy string, history History, status Status) (Listing, error)
@@ -234,6 +247,9 @@ type Store interface {
 	SaveStyleProfile(ctx context.Context, profile StyleProfile) (StyleProfile, error)
 	ListStyleProfiles(ctx context.Context) ([]StyleProfile, error)
 	GetStyleProfile(ctx context.Context, id string) (StyleProfile, error)
+	CreateUser(ctx context.Context, user User) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id string) (User, error)
 	Close()
 }
 
@@ -264,6 +280,7 @@ func NewStore(ctx context.Context, databaseURL string) (Store, error) {
 func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS listings (
         id TEXT PRIMARY KEY,
+        owner_id TEXT,
         address TEXT NOT NULL,
         neighborhood TEXT,
         city TEXT,
@@ -294,6 +311,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 
 	var schemaAlters = []string{
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS neighborhood TEXT`,
+		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS owner_id TEXT`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS city TEXT`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_type TEXT`,
 		`ALTER TABLE listings ADD COLUMN IF NOT EXISTS condition TEXT`,
@@ -342,6 +360,15 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	if _, err := pool.Exec(ctx, `ALTER TABLE style_profiles ADD COLUMN IF NOT EXISTS last_trained_at TIMESTAMPTZ`); err != nil {
 		return fmt.Errorf("alter style_profiles last_trained_at: %w", err)
+	}
+
+	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		email TEXT NOT NULL UNIQUE,
+		password_hash TEXT NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`); err != nil {
+		return fmt.Errorf("create users table: %w", err)
 	}
 
 	return nil
