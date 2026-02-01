@@ -498,6 +498,9 @@ func sanitizeContent(text string) string {
 		lines[i] = strings.Join(strings.Fields(line), " ")
 	}
 	clean := strings.TrimSpace(strings.Join(lines, "\n"))
+	// Replace asterisk bullets ("* ") with bullet points to avoid stars in short summaries.
+	bulletRe := regexp.MustCompile(`(?m)^\*\s+`)
+	clean = bulletRe.ReplaceAllString(clean, "• ")
 	return addParagraphBreaks(clean)
 }
 

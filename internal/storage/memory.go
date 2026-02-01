@@ -246,6 +246,7 @@ func (s *InMemoryStore) CreateUser(_ context.Context, user User) (User, error) {
 		user.CreatedAt = time.Now()
 	}
 	user.Email = email
+	user.Approved = false
 	s.users[user.ID] = user
 	s.emailIndex[email] = user.ID
 	return user, nil
@@ -274,4 +275,41 @@ func (s *InMemoryStore) GetUserByID(_ context.Context, id string) (User, error) 
 		return User{}, ErrNotFound
 	}
 	return user, nil
+}
+
+// ApproveUser updates approval flag.
+func (s *InMemoryStore) ApproveUser(_ context.Context, id string, approved bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	user, ok := s.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	user.Approved = approved
+	s.users[id] = user
+	return nil
+}
+
+// ListUsers returns all users.
+func (s *InMemoryStore) ListUsers(_ context.Context) ([]User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	users := make([]User, 0, len(s.users))
+	for _, u := range s.users {
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// DeleteUser removes a user by id.
+func (s *InMemoryStore) DeleteUser(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.users[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.emailIndex, strings.ToLower(s.users[id].Email))
+	delete(s.users, id)
+	return nil
 }

@@ -229,6 +229,7 @@ type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
+	Approved     bool      `json:"approved"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -250,6 +251,9 @@ type Store interface {
 	CreateUser(ctx context.Context, user User) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
+	ApproveUser(ctx context.Context, id string, approved bool) error
+	ListUsers(ctx context.Context) ([]User, error)
+	DeleteUser(ctx context.Context, id string) error
 	Close()
 }
 
@@ -366,9 +370,13 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		id TEXT PRIMARY KEY,
 		email TEXT NOT NULL UNIQUE,
 		password_hash TEXT NOT NULL,
+		approved BOOLEAN NOT NULL DEFAULT false,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`); err != nil {
 		return fmt.Errorf("create users table: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false`); err != nil {
+		return fmt.Errorf("alter users approved: %w", err)
 	}
 
 	return nil

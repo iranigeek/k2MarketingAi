@@ -294,6 +294,7 @@ func (s *PostgresStore) CreateUser(ctx context.Context, user User) (User, error)
 	if user.CreatedAt.IsZero() {
 		user.CreatedAt = time.Now()
 	}
+	user.Approved = false
 	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
 	if _, err := s.pool.Exec(ctx, `INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)`, user.ID, user.Email, user.PasswordHash, user.CreatedAt); err != nil {
 		var pgErr *pgconn.PgError
@@ -307,14 +308,50 @@ func (s *PostgresStore) CreateUser(ctx context.Context, user User) (User, error)
 
 // GetUserByEmail fetches a user by their email address.
 func (s *PostgresStore) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, created_at FROM users WHERE email=$1`, strings.ToLower(strings.TrimSpace(email)))
+	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, approved, created_at FROM users WHERE email=$1`, strings.ToLower(strings.TrimSpace(email)))
 	return scanUser(row)
 }
 
 // GetUserByID fetches a user by ID.
 func (s *PostgresStore) GetUserByID(ctx context.Context, id string) (User, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, created_at FROM users WHERE id=$1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, approved, created_at FROM users WHERE id=$1`, id)
 	return scanUser(row)
+}
+
+// ApproveUser updates the approval flag for a user.
+func (s *PostgresStore) ApproveUser(ctx context.Context, id string, approved bool) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET approved=$2 WHERE id=$1`, id, approved)
+	if err != nil {
+		return fmt.Errorf("update user approval: %w", err)
+	}
+	return nil
+}
+
+// ListUsers returns all users.
+func (s *PostgresStore) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, email, password_hash, approved, created_at FROM users ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		user, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// DeleteUser removes a user by id.
+func (s *PostgresStore) DeleteUser(ctx context.Context, id string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
 }
 
 type rowScanner interface {
@@ -410,7 +447,7 @@ func scanStyleProfile(row rowScanner) (StyleProfile, error) {
 
 func scanUser(row rowScanner) (User, error) {
 	var user User
-	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt); err != nil {
+	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Approved, &user.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return User{}, ErrNotFound
 		}

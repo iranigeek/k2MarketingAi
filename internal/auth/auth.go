@@ -62,7 +62,7 @@ func (m Middleware) InjectUser(next http.Handler) http.Handler {
 		cookie, err := r.Cookie(m.Sessions.cookieName())
 		if err == nil && cookie.Value != "" {
 			if claims, err := m.Sessions.Parse(cookie.Value); err == nil && claims.ExpiresAt.After(time.Now()) {
-				if user, err := m.Store.GetUserByID(r.Context(), claims.UserID); err == nil {
+				if user, err := m.Store.GetUserByID(r.Context(), claims.UserID); err == nil && user.Approved {
 					r = r.WithContext(WithUser(r.Context(), user))
 				}
 			} else if err != nil {
@@ -110,6 +110,7 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Email:        email,
 		PasswordHash: string(hashed),
 		CreatedAt:    time.Now(),
+		Approved:     false,
 	}
 	created, err := h.Store.CreateUser(r.Context(), user)
 	if err != nil {
@@ -121,12 +122,13 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.setSessionCookie(w, created.ID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = jsonResponse(w, http.StatusCreated, map[string]any{
 		"id":         created.ID,
 		"email":      created.Email,
 		"created_at": created.CreatedAt,
+		"approved":   created.Approved,
+		"status":     "pending_approval",
 	})
 }
 
@@ -153,6 +155,10 @@ func (h Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "felaktiga inloggningsuppgifter", http.StatusUnauthorized)
 		return
 	}
+	if !user.Approved {
+		http.Error(w, "kontot v\u00e4ntar p\u00e5 godk\u00e4nnande", http.StatusForbidden)
+		return
+	}
 
 	h.setSessionCookie(w, user.ID)
 	w.Header().Set("Content-Type", "application/json")
@@ -160,6 +166,7 @@ func (h Handler) Login(w http.ResponseWriter, r *http.Request) {
 		"id":         user.ID,
 		"email":      user.Email,
 		"created_at": user.CreatedAt,
+		"approved":   user.Approved,
 	})
 }
 
@@ -182,8 +189,11 @@ func (h Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"id":         user.ID,
 		"email":      user.Email,
 		"created_at": user.CreatedAt,
+		"approved":   user.Approved,
 	})
 }
+
+func (h Handler) notifyAdmins(user storage.User) {}
 
 // Parse validates a token and returns session claims.
 func (sm SessionManager) Parse(token string) (Claims, error) {

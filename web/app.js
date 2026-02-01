@@ -120,6 +120,10 @@ async function handleLoginSubmit(e) {
             return;
         }
         const user = await res.json();
+        if (user.approved === false) {
+            showAuthError('Kontot väntar på godkännande.');
+            return;
+        }
         setUser(user);
         hideAuthOverlay();
         await initApp();
@@ -150,6 +154,10 @@ async function handleRegisterSubmit(e) {
             return;
         }
         const user = await res.json();
+        if (user.approved === false) {
+            showAuthError('Kontot är skapat men väntar på godkännande. Vi hör av oss!');
+            return;
+        }
         setUser(user);
         hideAuthOverlay();
         await initApp();
