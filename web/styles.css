@@ -37,7 +37,7 @@ button { font: inherit; cursor: pointer; border: none; }
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    padding: 24px 16px;
+    padding: 16px 12px;
     gap: 12px;
     box-shadow: var(--shadow);
     z-index: 10;
@@ -46,6 +46,23 @@ button { font: inherit; cursor: pointer; border: none; }
 }
 body.sidebar-open .sidebar {
     transform: translateX(0);
+}
+.sidebar__logo {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0;
+    margin: 10px 0 -4px -12px;
+}
+.sidebar__logo img {
+    max-width: 140px;
+    height: auto;
+    display: block;
+    transform: translateY(1px);
+}
+.sidebar__footer {
+    margin-top: auto;
+    padding-bottom: 6px;
 }
 .sidebar__brand {
     width: 100%;
