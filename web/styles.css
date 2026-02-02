@@ -55,7 +55,7 @@ body.sidebar-open .sidebar {
     margin: 10px 0 -4px -20px;
 }
 .sidebar__logo img {
-    max-width: 140px;
+    max-width: 160px;
     height: auto;
     display: block;
     transform: translateY(1px);
