@@ -1,7 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 335 88" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 335 80" role="img" aria-labelledby="title">
   <title id="title">vemra.</title>
   <style>
-    text { font-family: "Poppins", "Helvetica Neue", Arial, sans-serif; font-size: 72px; font-weight: 500; fill: #0f4036; letter-spacing: 0; }
+    text {
+      font-family: "Montserrat", "Poppins", "Helvetica Neue", Arial, sans-serif;
+      font-size: 72px;
+      font-weight: 400;
+      fill: #0d3c34;
+      letter-spacing: -0.8px;
+      text-rendering: optimizeLegibility;
+    }
   </style>
-  <text x="50%" y="72%" text-anchor="middle">vemra.</text>
+  <text x="50%" y="70%" text-anchor="middle">vemra.</text>
 </svg>
