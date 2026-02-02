@@ -2,13 +2,13 @@
   <title id="title">vemra.</title>
   <style>
     text {
-      font-family: "Montserrat", "Poppins", "Helvetica Neue", Arial, sans-serif;
-      font-size: 72px;
-      font-weight: 400;
+      font-family: "Montserrat Alternates", "Montserrat", "Poppins", "Helvetica Neue", Arial, sans-serif;
+      font-size: 68px;
+      font-weight: 300;
       fill: #0d3c34;
-      letter-spacing: -0.8px;
+      letter-spacing: 0.4px;
       text-rendering: optimizeLegibility;
     }
   </style>
-  <text x="50%" y="70%" text-anchor="middle">vemra.</text>
+  <text x="50%" y="68%" text-anchor="middle">vemra.</text>
 </svg>
