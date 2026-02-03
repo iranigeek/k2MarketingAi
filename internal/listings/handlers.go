@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -94,6 +95,16 @@ func (h Handler) fetchListingForUser(ctx context.Context, id string, userID stri
 		return storage.Listing{}, storage.ErrNotFound
 	}
 	return listing, nil
+}
+
+func logUploadEvent(format string, args ...interface{}) {
+	f, err := os.OpenFile("upload_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Printf("upload debug log open failed: %v", err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s: %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
 }
 
 // Create handles POST /api/listings.
@@ -611,6 +622,7 @@ func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "uploads disabled", http.StatusNotImplemented)
 		return
 	}
+	logUploadEvent("start UploadMedia")
 	if err := r.ParseMultipartForm(maxImageBytes + (1 << 20)); err != nil {
 		http.Error(w, fmt.Sprintf("invalid upload payload: %v", err), http.StatusBadRequest)
 		return
@@ -641,7 +653,10 @@ func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		contentType = http.DetectContentType(data)
 	}
 
-	result, err := h.Uploader.Upload(r.Context(), media.UploadInput{
+	uploadCtx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	result, err := h.Uploader.Upload(uploadCtx, media.UploadInput{
 		Filename:    header.Filename,
 		ContentType: contentType,
 		Body:        bytes.NewReader(data),
@@ -651,14 +666,18 @@ func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusInternalServerError
 		if errors.Is(err, media.ErrUploaderDisabled) {
 			status = http.StatusBadRequest
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			status = http.StatusGatewayTimeout
 		} else {
 			log.Printf("upload failed: %v", err)
 		}
+		logUploadEvent("upload failed: %v", err)
 		http.Error(w, "could not upload file", status)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	logUploadEvent("upload ok: key=%s size=%d", result.Key, len(data))
 	_ = json.NewEncoder(w).Encode(result)
 }
 
