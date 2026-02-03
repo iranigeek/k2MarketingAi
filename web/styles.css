@@ -838,6 +838,20 @@ body.sidebar-open .sidebar {
 }
 .version-item button { background: transparent; color: var(--gold); border: 1px solid var(--border); padding: 6px 8px; border-radius: 10px; }
 
+.annual-panel { display: flex; flex-direction: column; gap: 16px; }
+.annual-upload { display: flex; flex-direction: column; gap: 8px; }
+.annual-drop { cursor: pointer; text-align: center; border-style: dashed; background: #f9fbff; }
+.annual-drop:hover { border-color: var(--gold); background: #f7f0d9; }
+.annual-result { background: #f7f9fe; border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.annual-result h4 { margin: 6px 0; }
+.annual-result ul { margin: 8px 0 0 18px; padding: 0; }
+.annual-result li { margin-bottom: 4px; }
+.annual-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.annual-badge { background: #eef3fb; border: 1px solid var(--border); padding: 4px 8px; border-radius: 10px; font-size: 0.9rem; }
+.annual-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+.annual-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: white; }
+.annual-card strong { display: block; margin-bottom: 4px; }
+
 @media (max-width: 1400px) {
     .workspace {
         grid-template-columns: 1fr;

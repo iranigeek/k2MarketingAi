@@ -23,6 +23,11 @@ const state = {
     visionRenderImage: '',
     visionRenderAsset: null,
     editingListingId: null,
+    annualReport: {
+        status: '',
+        result: null,
+        fileName: '',
+    },
 };
 
 function value(id) {
@@ -1052,6 +1057,25 @@ function bindEvents() {
         await handleFiles({ target: { files: e.dataTransfer.files } });
     });
 
+    const annualInput = document.getElementById('annual-file');
+    const annualDrop = document.getElementById('annual-drop');
+    if (annualInput) {
+        annualInput.addEventListener('change', async e => {
+            await handleAnnualFileChange(e.target.files);
+            e.target.value = '';
+        });
+    }
+    if (annualDrop) {
+        annualDrop.addEventListener('click', () => annualInput?.click());
+        annualDrop.addEventListener('dragover', e => { e.preventDefault(); annualDrop.classList.add('dragging'); });
+        annualDrop.addEventListener('dragleave', () => annualDrop.classList.remove('dragging'));
+        annualDrop.addEventListener('drop', e => {
+            e.preventDefault();
+            annualDrop.classList.remove('dragging');
+            handleAnnualFileChange(e.dataTransfer?.files);
+        });
+    }
+
     document.getElementById('clear-versions').addEventListener('click', () => {
         state.versions = [];
         renderVersions();
@@ -1591,27 +1615,220 @@ async function queueUpload(file, targetListingId) {
     renderUploads();
 }
 
-async function uploadMediaFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch('/api/uploads', {
-        method: 'POST',
-        body: formData,
-    });
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Misslyckades med uppladdning');
+async function uploadMediaFile(file, timeoutMs = 30000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/uploads', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Misslyckades med uppladdning');
+        }
+        const payload = await res.json();
+        const normalized = {
+            url: payload.url || payload.URL || '',
+            key: payload.key || payload.Key || '',
+        };
+        if (!normalized.url) {
+            throw new Error('Uppladdningen saknar URL – kontrollera S3-konfigurationen.');
+        }
+        return normalized;
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error('Uppladdningen tog för lång tid. Kontrollera nätverket eller försök igen.');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
     }
-    const payload = await res.json();
-    const normalized = {
-        url: payload.url || payload.URL || '',
-        key: payload.key || payload.Key || '',
-    };
-    if (!normalized.url) {
-        throw new Error('Uppladdningen saknar URL – kontrollera S3-konfigurationen.');
-    }
-    return normalized;
 }
+
+async function extractAnnualReport(file, timeoutMs = 90000) {
+    if (!file) return;
+    state.annualReport.status = 'Analyserar årsredovisningen...';
+    renderAnnualResult();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/annual-reports/extract', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+        });
+        if (res.status === 401) {
+            handleUnauthorized('Sessionen gick ut. Logga in igen.');
+            return;
+        }
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Misslyckades med att extrahera årsredovisning');
+        }
+        const payload = await res.json();
+        state.annualReport.result = payload;
+        state.annualReport.status = 'Klar';
+        state.annualReport.fileName = file.name;
+    } catch (err) {
+        state.annualReport.status = err.name === 'AbortError'
+            ? 'Tog för lång tid. Försök igen eller använd en mindre PDF.'
+            : (err.message || 'Ett fel uppstod');
+        state.annualReport.result = null;
+    } finally {
+        clearTimeout(timer);
+        renderAnnualResult();
+    }
+}
+
+function handleAnnualFileChange(fileList) {
+    const file = fileList?.[0];
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    if (!file.type.includes('pdf') && !name.endsWith('.pdf')) {
+        state.annualReport.status = 'Endast PDF-filer stöds.';
+        state.annualReport.result = null;
+        renderAnnualResult();
+        return;
+    }
+    tryClientPdfExtraction(file).catch(() => extractAnnualReport(file));
+}
+
+function renderAnnualResult() {
+    const statusEl = document.getElementById('annual-status');
+    const resultEl = document.getElementById('annual-result');
+    if (!resultEl) return;
+    if (statusEl) statusEl.textContent = state.annualReport.status || '';
+    if (!state.annualReport.result) {
+        resultEl.innerHTML = '<p class="muted">Ingen årsredovisning analyserad ännu.</p>';
+        return;
+    }
+    const r = state.annualReport.result;
+    const bullets = [
+        r.summary ? `<li>${r.summary}</li>` : '',
+        r.fee_per_month ? `<li><strong>Avgift:</strong> ${r.fee_per_month}</li>` : '',
+        r.debt_per_sqm ? `<li><strong>Skuld/kvm:</strong> ${r.debt_per_sqm}</li>` : '',
+        r.total_debt ? `<li><strong>Totala skulder:</strong> ${r.total_debt}</li>` : '',
+        r.planned_maintenance ? `<li><strong>Planerat underhåll:</strong> ${r.planned_maintenance}</li>` : '',
+        r.notable_risks ? `<li><strong>Risker:</strong> ${r.notable_risks}</li>` : '',
+        r.energy_class ? `<li><strong>Energiklass:</strong> ${r.energy_class}</li>` : '',
+        r.energy_consumption ? `<li><strong>Energi:</strong> ${r.energy_consumption}</li>` : '',
+    ].filter(Boolean).join('');
+
+    const badges = [
+        r.source_pages ? `<span class="annual-badge">${r.source_pages} sidor</span>` : '',
+        r.characters_analysed ? `<span class="annual-badge">${r.characters_analysed} tecken</span>` : '',
+        state.annualReport.fileName ? `<span class="annual-badge">${state.annualReport.fileName}</span>` : '',
+    ].filter(Boolean).join('');
+
+    const keyLines = [
+        ['Org.nr', r.org_number],
+        ['Fastighetsbeteckning', r.property_designation],
+        ['Byggår', r.build_year],
+        ['BOA', r.boa_total],
+        ['LOA', r.loa_total],
+        ['Skulder till kreditinstitut', r.debt_credit_total],
+        ['Kassa & bank', r.cash_and_bank],
+        ['Årets resultat', r.net_result],
+        ['Räntekostnader', r.interest_costs],
+        ['Avskrivningar', r.depreciation],
+        ['Intäkter årsavgifter', r.fee_income],
+        ['Intäkter lokaler', r.rental_income],
+        ['Markägande', r.land_status],
+        ['Avgäld utgång', r.land_lease_expiry],
+    ].filter(([, val]) => val);
+
+    const reno = [
+        r.renovations_done ? `<li><strong>Utfört:</strong> ${r.renovations_done}</li>` : '',
+        r.renovations_planned ? `<li><strong>Planerat:</strong> ${r.renovations_planned}</li>` : '',
+    ].filter(Boolean).join('');
+
+    resultEl.innerHTML = `
+        <div class="annual-badges">${badges}</div>
+        <div class="annual-grid">
+            <div class="annual-card">
+                <strong>Nycklar</strong>
+                <ul>${bullets || '<li>Inga nyckeltal hittades.</li>'}</ul>
+            </div>
+            <div class="annual-card">
+                <strong>Styrelsens kommentarer</strong>
+                <p>${r.board_comments || '—'}</p>
+            </div>
+            <div class="annual-card">
+                <strong>Association & ekonomi</strong>
+                <ul>
+                    ${keyLines.map(([k,v]) => `<li><strong>${k}:</strong> ${v}</li>`).join('') || '<li>—</li>'}
+                </ul>
+            </div>
+            <div class="annual-card">
+                <strong>Renoveringar</strong>
+                <ul>${reno || '<li>—</li>'}</ul>
+            </div>
+        </div>
+    `;
+}
+
+async function tryClientPdfExtraction(file) {
+    if (!window.pdfjsLib) {
+        state.annualReport.status = 'Laddar upp till servern...';
+        renderAnnualResult();
+        await extractAnnualReport(file);
+        return;
+    }
+    state.annualReport.status = 'Läser PDF i browsern...';
+    renderAnnualResult();
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const maxPages = Math.min(pdf.numPages, 30);
+    let text = '';
+    for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const strings = content.items.map(item => item.str).filter(Boolean);
+        text += strings.join(' ') + '\n';
+    }
+    const sanitized = text.trim();
+    if (!sanitized) {
+        state.annualReport.status = 'Ingen text hittades i PDF:en, laddar upp till servern...';
+        renderAnnualResult();
+        await extractAnnualReport(file);
+        return;
+    }
+
+    // Send text to summarize endpoint
+    state.annualReport.status = 'Analyserar text lokalt...';
+    renderAnnualResult();
+    const payload = {
+        text: sanitized.slice(0, 12000),
+        file_name: file.name,
+        pages: maxPages,
+    };
+    const res = await fetch('/api/annual-reports/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (res.status === 401) {
+        handleUnauthorized('Sessionen gick ut. Logga in igen.');
+        return;
+    }
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || 'Misslyckades med att extrahera text');
+    }
+    const data = await res.json();
+    state.annualReport.result = data;
+    state.annualReport.status = 'Klar';
+    state.annualReport.fileName = file.name;
+    renderAnnualResult();
+}
+
 
 function renderUploads() {
     const list = document.getElementById('upload-list');
@@ -1770,6 +1987,10 @@ function updateTopbarCopy(view) {
             title: 'Bildstudio',
             subtitle: 'Analysera bilder och skapa designförslag.',
         },
+        annuals: {
+            title: 'Extrahera årsredovisningar',
+            subtitle: 'Plocka ut nyckeltal ur BRF-PDF.',
+        },
         images: {
             title: 'Bildhantering',
             subtitle: 'Hantera och ladda upp bildmaterial.',
@@ -1833,6 +2054,7 @@ function updateImageStats() {
 
 bindEvents();
 renderVisionLab();
+renderAnnualResult();
 showView('objects');
 checkSession();
 

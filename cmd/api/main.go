@@ -74,6 +74,7 @@ func main() {
 		visionDesigner vision.Designer
 		visionRenderer vision.ImageGenerator
 		imagenRenderer vision.ImagenClient
+		geminiClient   llm.Client
 	)
 	var geminiTokenSource oauth2.TokenSource
 	if tokenBytes, err := loadServiceAccountJSON(cfg.AI.Gemini.ServiceAccount, cfg.AI.Gemini.ServiceAccountJSON); err != nil {
@@ -89,7 +90,7 @@ func main() {
 	switch {
 	case strings.EqualFold(cfg.AI.Provider, "gemini") && (cfg.AI.Gemini.APIKey != "" || geminiTokenSource != nil):
 		timeout := time.Duration(cfg.AI.Gemini.TimeoutSeconds) * time.Second
-		geminiClient := llm.NewGeminiClient(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.Model, timeout, geminiTokenSource)
+		geminiClient = llm.NewGeminiClient(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.Model, timeout, geminiTokenSource)
 		generator = generation.NewLLM(geminiClient)
 		visionAnalyzer = vision.NewGeminiAnalyzer(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.VisionModel, timeout)
 		visionDesigner = vision.NewGeminiDesigner(geminiClient)
@@ -137,6 +138,7 @@ func main() {
 		Generator:   generator,
 		Vision:      visionAnalyzer,
 		Events:      eventBroker,
+		LLM:         geminiClient,
 	}
 
 	staticFS := http.FileServer(http.Dir("web"))

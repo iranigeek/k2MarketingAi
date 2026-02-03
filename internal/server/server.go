@@ -43,6 +43,8 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth)
 			r.Post("/uploads", listingHandler.UploadMedia)
+			r.Post("/annual-reports/extract", listingHandler.ExtractAnnualReport)
+			r.Post("/annual-reports/summarize", listingHandler.SummarizeAnnualReport)
 			r.Route("/listings", func(r chi.Router) {
 				r.Get("/", listingHandler.List)
 				r.Post("/", listingHandler.Create)

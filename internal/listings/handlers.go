@@ -10,11 +10,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	pdf "github.com/ledongthuc/pdf"
 
 	"k2MarketingAi/internal/auth"
 	"k2MarketingAi/internal/events"
@@ -38,6 +40,7 @@ type Handler struct {
 	Generator   generation.Generator
 	Vision      vision.Analyzer
 	Events      *events.Broker
+	LLM         llm.Client
 }
 
 // CreateListingRequest describes inbound payload for creating a listing.
@@ -105,6 +108,96 @@ func logUploadEvent(format string, args ...interface{}) {
 	}
 	defer f.Close()
 	fmt.Fprintf(f, "%s: %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
+}
+
+func logAnnualEvent(format string, args ...interface{}) {
+	f, err := os.OpenFile("annual_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Printf("annual debug log open failed: %v", err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s: %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(format, args...))
+}
+
+func firstN(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n])
+}
+
+// cleanLLMJSON removes code fences ``` and ```json ... ``` to make the payload valid JSON.
+func cleanLLMJSON(s string) string {
+	trim := strings.TrimSpace(s)
+	if strings.HasPrefix(trim, "```") {
+		trim = strings.TrimPrefix(trim, "```json")
+		trim = strings.TrimPrefix(trim, "```")
+		trim = strings.TrimSuffix(trim, "```")
+	}
+	return strings.TrimSpace(trim)
+}
+
+func callLLMWithRetry(ctx context.Context, client llm.Client, msgs []llm.ChatMessage, temp float64) (string, error) {
+	const attempts = 3
+	const backoffFirst = 1200 * time.Millisecond
+	for i := 0; i < attempts; i++ {
+		reply, err := client.ChatCompletion(ctx, msgs, temp)
+		if err == nil {
+			return reply, nil
+		}
+		// If context is done, break early.
+		if ctx.Err() != nil {
+			return "", err
+		}
+		errMsg := strings.ToLower(err.Error())
+		if !(strings.Contains(errMsg, "503") || strings.Contains(errMsg, "overloaded")) {
+			return "", err
+		}
+		// Retry with simple backoff.
+		sleep := backoffFirst * time.Duration(i+1)
+		logAnnualEvent("llm overloaded, retry %d/%d after %v: %v", i+1, attempts, sleep, err)
+		time.Sleep(sleep)
+	}
+	return "", fmt.Errorf("llm overloaded after retries")
+}
+
+func applyAnnualMap(summary *AnnualReportSummary, m map[string]any) {
+	set := func(dst *string, key string) {
+		if v, ok := m[key]; ok && v != nil {
+			*dst = fmt.Sprint(v)
+		}
+	}
+	set(&summary.OrgNumber, "org_number")
+	set(&summary.PropertyDesignation, "property_designation")
+	set(&summary.BuildYear, "build_year")
+	set(&summary.BoaTotal, "boa_total")
+	set(&summary.LoaTotal, "loa_total")
+	set(&summary.DebtCreditTotal, "debt_credit_total")
+	set(&summary.CashAndBank, "cash_and_bank")
+	set(&summary.NetResult, "net_result")
+	set(&summary.InterestCosts, "interest_costs")
+	set(&summary.Depreciation, "depreciation")
+	set(&summary.FeeIncome, "fee_income")
+	set(&summary.RentalIncome, "rental_income")
+	set(&summary.LandStatus, "land_status")
+	set(&summary.LandLeaseExpiry, "land_lease_expiry")
+	set(&summary.RenovationsDone, "renovations_done")
+	set(&summary.RenovationsPlanned, "renovations_planned")
+	set(&summary.FeePerMonth, "fee_per_month")
+	set(&summary.DebtPerSqm, "debt_per_sqm")
+	set(&summary.TotalDebt, "total_debt")
+	set(&summary.Liquidity, "liquidity")
+	set(&summary.PlannedMaintenance, "planned_maintenance")
+	set(&summary.NotableRisks, "notable_risks")
+	set(&summary.EnergyClass, "energy_class")
+	set(&summary.EnergyConsumption, "energy_consumption")
+	set(&summary.BoardComments, "board_comments")
+	set(&summary.Summary, "summary")
+	if v, ok := m["extraction_confidence"]; ok && v != nil {
+		summary.ExtractionConfidence = fmt.Sprint(v)
+	}
 }
 
 // Create handles POST /api/listings.
@@ -679,6 +772,338 @@ func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	logUploadEvent("upload ok: key=%s size=%d", result.Key, len(data))
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+// AnnualReportSummary captures the key insights extracted from a BRF årsredovisning.
+type AnnualReportSummary struct {
+	Summary            string `json:"summary"`
+	FeePerMonth        string `json:"fee_per_month"`
+	DebtPerSqm         string `json:"debt_per_sqm"`
+	TotalDebt          string `json:"total_debt"`
+	Liquidity          string `json:"liquidity"`
+	PlannedMaintenance string `json:"planned_maintenance"`
+	NotableRisks       string `json:"notable_risks"`
+	EnergyClass        string `json:"energy_class"`
+	EnergyConsumption  string `json:"energy_consumption"`
+	BoardComments      string `json:"board_comments"`
+	// Nyckeltal efterfrågade
+	OrgNumber            string `json:"org_number"`
+	PropertyDesignation  string `json:"property_designation"`
+	BuildYear            string `json:"build_year"`
+	BoaTotal             string `json:"boa_total"`
+	LoaTotal             string `json:"loa_total"`
+	DebtCreditTotal      string `json:"debt_credit_total"`
+	CashAndBank          string `json:"cash_and_bank"`
+	NetResult            string `json:"net_result"`
+	InterestCosts        string `json:"interest_costs"`
+	Depreciation         string `json:"depreciation"`
+	FeeIncome            string `json:"fee_income"`
+	RentalIncome         string `json:"rental_income"`
+	LandStatus           string `json:"land_status"`
+	LandLeaseExpiry      string `json:"land_lease_expiry"`
+	RenovationsDone      string `json:"renovations_done"`
+	RenovationsPlanned   string `json:"renovations_planned"`
+	SourcePageCount      int    `json:"source_pages"`
+	CharactersAnalysed   int    `json:"characters_analysed"`
+	ExtractionModel      string `json:"extraction_model"`
+	ExtractionConfidence string `json:"extraction_confidence,omitempty"`
+	FileName             string `json:"file_name,omitempty"`
+	InputKind            string `json:"input_kind,omitempty"` // pdf-upload | text-client
+}
+
+const maxAnnualBytes = 15 * 1024 * 1024 // 15 MB
+const maxAnnualPages = 40
+const maxAnnualChars = 20000
+
+// ExtractAnnualReport handles POST /api/annual-reports/extract.
+// It accepts a PDF, extracts text and asks the LLM to summarise key BRF nyckeltal.
+func (h Handler) ExtractAnnualReport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := currentUser(w, r); !ok {
+		return
+	}
+
+	logAnnualEvent("start extract")
+
+	if err := r.ParseMultipartForm(maxAnnualBytes + (1 << 20)); err != nil {
+		logAnnualEvent("parse form error: %v", err)
+		http.Error(w, fmt.Sprintf("ogiltig uppladdning: %v", err), http.StatusBadRequest)
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		logAnnualEvent("form file error: %v", err)
+		http.Error(w, "fil saknas (välj en PDF)", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxAnnualBytes+1))
+	if err != nil {
+		logAnnualEvent("read file error: %v", err)
+		http.Error(w, "kunde inte läsa filen", http.StatusBadRequest)
+		return
+	}
+	if len(data) == 0 {
+		logAnnualEvent("file empty")
+		http.Error(w, "filen var tom", http.StatusBadRequest)
+		return
+	}
+	if len(data) > maxAnnualBytes {
+		logAnnualEvent("file too large: %d bytes", len(data))
+		http.Error(w, "filen är för stor (max 15 MB)", http.StatusBadRequest)
+		return
+	}
+
+	pageText, pageCount, err := extractPDFText(data, maxAnnualPages) // läs fler sidor för att hitta nyckeltal
+	if err != nil || strings.TrimSpace(pageText) == "" {
+		msg := "kunde inte läsa PDF (ingen text hittades – exportera som textbaserad PDF eller kör OCR)."
+		if err != nil {
+			msg = fmt.Sprintf("%s Detalj: %v", msg, err)
+		}
+		logAnnualEvent("parse text fail: %s", msg)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	sanitized := sanitizeWhitespace(pageText)
+	if len(sanitized) > maxAnnualChars {
+		sanitized = sanitized[:maxAnnualChars]
+	}
+	logAnnualEvent("text prepared file=%s pages=%d chars=%d", header.Filename, pageCount, len(sanitized))
+
+	summary := AnnualReportSummary{
+		SourcePageCount:    pageCount,
+		CharactersAnalysed: len(sanitized),
+		ExtractionModel:    "heuristic",
+		FileName:           header.Filename,
+		InputKind:          "pdf-upload",
+	}
+
+	if h.LLM == nil {
+		logAnnualEvent("LLM missing, returning heuristic message")
+		summary.Summary = "LLM saknas i servern, kan inte extrahera automatiskt."
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(summary)
+		return
+	}
+
+	modelCtx := llm.WithModel(r.Context(), "gemini-3-pro-preview")
+	systemPrompt := `Du är en svensk ekonom som sammanfattar bostadsrättsföreningars årsredovisningar.
+Plocka ut konkreta siffror och citat. Svara alltid som JSON med exakt fältnamn och inget annat (ingen inledande eller avslutande text). Använd "okänd" om du inte hittar data.`
+	userPrompt := fmt.Sprintf(`Text från årsredovisning (urklipp):
+"""
+%s
+"""
+
+Returnera JSON med följande nycklar:
+- org_number
+- property_designation
+- build_year
+- boa_total
+- loa_total
+- debt_credit_total
+- cash_and_bank
+- net_result
+- interest_costs
+- depreciation
+- fee_income
+- rental_income
+- land_status
+- land_lease_expiry
+- renovations_done
+- renovations_planned
+- fee_per_month: månadsavgift per lägenhet eller kvm om angivet (format: "<belopp> kr", annars "okänd")
+- debt_per_sqm: föreningens skuld per kvm (kr/kvm)
+- total_debt: totala skulder eller lån
+- liquidity: kassa, likvida medel eller omsättningstillgångar
+- planned_maintenance: planerade renoveringar/underhåll och årtal
+- notable_risks: risker eller varningar från styrelsen/revisor
+- energy_class: energiklass om angivet
+- energy_consumption: kWh/kvm/år om angivet
+- board_comments: viktiga citat från förvaltningsberättelse/styrelsen
+- summary: kort svensk sammanfattning (2–3 meningar) av föreningens finansiella läge`, sanitized)
+
+	reply, err := callLLMWithRetry(modelCtx, h.LLM, []llm.ChatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}, 0.15)
+	if err != nil {
+		logAnnualEvent("llm error: %v", err)
+		status := http.StatusInternalServerError
+		if strings.Contains(strings.ToLower(err.Error()), "overloaded") {
+			status = http.StatusServiceUnavailable
+		}
+		http.Error(w, fmt.Sprintf("kunde inte extrahera: %v", err), status)
+		return
+	}
+
+	replyClean := cleanLLMJSON(reply)
+	if err := json.Unmarshal([]byte(replyClean), &summary); err != nil {
+		// try forgiving parse via map to handle numbers
+		var m map[string]any
+		trimmed := strings.TrimSpace(replyClean)
+		if !strings.HasPrefix(trimmed, "{") {
+			trimmed = "{" + trimmed + "}"
+		}
+		if uerr := json.Unmarshal([]byte(trimmed), &m); uerr != nil {
+			logAnnualEvent("unmarshal fail: %v reply_snippet=%s", uerr, firstN(trimmed, 500))
+			http.Error(w, "kunde inte tolka LLM-svaret (inte JSON)", http.StatusBadRequest)
+			return
+		}
+		applyAnnualMap(&summary, m)
+	}
+	summary.SourcePageCount = pageCount
+	summary.CharactersAnalysed = len(sanitized)
+	summary.ExtractionModel = "gemini-3-pro-preview"
+	logAnnualEvent("ok file=%s pages=%d chars=%d", header.Filename, pageCount, len(sanitized))
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+// SummarizeAnnualReport handles POST /api/annual-reports/summarize for client-side extracted text.
+func (h Handler) SummarizeAnnualReport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := currentUser(w, r); !ok {
+		return
+	}
+	var req struct {
+		Text     string `json:"text"`
+		FileName string `json:"file_name"`
+		Pages    int    `json:"pages"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
+		http.Error(w, "ogiltig text-payload", http.StatusBadRequest)
+		return
+	}
+
+	sanitized := sanitizeWhitespace(req.Text)
+	if len(sanitized) > 12000 {
+		sanitized = sanitized[:12000]
+	}
+
+	summary := AnnualReportSummary{
+		SourcePageCount:    req.Pages,
+		CharactersAnalysed: len(sanitized),
+		ExtractionModel:    "heuristic",
+		FileName:           req.FileName,
+		InputKind:          "text-client",
+	}
+	if h.LLM == nil {
+		summary.Summary = "LLM saknas i servern, kan inte extrahera automatiskt."
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(summary)
+		return
+	}
+
+	modelCtx := llm.WithModel(r.Context(), "gemini-3-pro-preview")
+	systemPrompt := `Du är en svensk ekonom som sammanfattar bostadsrättsföreningars årsredovisningar.
+Plocka ut konkreta siffror och citat. Svara alltid som JSON med exakt fältnamn. Använd "okänd" om du inte hittar data.`
+	userPrompt := fmt.Sprintf(`Text från årsredovisning (urklipp):
+"""
+%s
+"""
+
+Returnera JSON med följande nycklar:
+- fee_per_month: månadsavgift per lägenhet eller kvm om angivet (format: "<belopp> kr", annars "okänd")
+- debt_per_sqm: föreningens skuld per kvm (kr/kvm)
+- total_debt: totala skulder eller lån
+- liquidity: kassa, likvida medel eller omsättningstillgångar
+- planned_maintenance: planerade renoveringar/underhåll och årtal
+- notable_risks: risker eller varningar från styrelsen/revisor
+- energy_class: energiklass om angivet
+- energy_consumption: kWh/kvm/år om angivet
+- board_comments: viktiga citat från förvaltningsberättelse/styrelsen
+- summary: kort svensk sammanfattning (2–3 meningar) av föreningens finansiella läge`, sanitized)
+
+	reply, err := callLLMWithRetry(modelCtx, h.LLM, []llm.ChatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}, 0.15)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(strings.ToLower(err.Error()), "overloaded") {
+			status = http.StatusServiceUnavailable
+		}
+		http.Error(w, fmt.Sprintf("kunde inte extrahera: %v", err), status)
+		return
+	}
+
+	replyClean := cleanLLMJSON(reply)
+	if err := json.Unmarshal([]byte(replyClean), &summary); err != nil {
+		var m map[string]any
+		trimmed := strings.TrimSpace(replyClean)
+		if !strings.HasPrefix(trimmed, "{") {
+			trimmed = "{" + trimmed + "}"
+		}
+		if uerr := json.Unmarshal([]byte(trimmed), &m); uerr != nil {
+			logAnnualEvent("unmarshal fail text payload: %v reply_snippet=%s", uerr, firstN(trimmed, 500))
+			http.Error(w, "kunde inte tolka LLM-svaret (inte JSON)", http.StatusBadRequest)
+			return
+		}
+		applyAnnualMap(&summary, m)
+	}
+	summary.SourcePageCount = req.Pages
+	summary.CharactersAnalysed = len(sanitized)
+	summary.ExtractionModel = "gemini-3-pro-preview"
+	logAnnualEvent("ok text payload file=%s pages=%d chars=%d", req.FileName, req.Pages, len(sanitized))
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(summary)
+}
+
+func extractPDFText(data []byte, maxPages int) (string, int, error) {
+	reader, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", 0, err
+	}
+	pages := reader.NumPage()
+	readPages := pages
+	if maxPages > 0 && pages > maxPages {
+		readPages = maxPages
+	}
+	var b strings.Builder
+	for i := 1; i <= readPages; i++ {
+		p := reader.Page(i)
+		if p.V.IsNull() {
+			continue
+		}
+		var (
+			text string
+			perr error
+		)
+		text, perr = p.GetPlainText(nil)
+		if perr != nil || strings.TrimSpace(text) == "" {
+			rows, rerr := p.GetTextByRow()
+			if rerr == nil && len(rows) > 0 {
+				var rowBuf strings.Builder
+				for _, row := range rows {
+					for _, cell := range row.Content {
+						rowBuf.WriteString(cell.S)
+					}
+					rowBuf.WriteString("\n")
+				}
+				text = rowBuf.String()
+				perr = nil
+			} else {
+				perr = rerr
+			}
+		}
+		if perr != nil || strings.TrimSpace(text) == "" {
+			continue
+		}
+		b.WriteString(text)
+		b.WriteString("\n\n")
+	}
+	out := strings.TrimSpace(b.String())
+	if out == "" {
+		return "", readPages, fmt.Errorf("ingen extraherbar text i PDF:en (lästa sidor: %d)", readPages)
+	}
+	return out, readPages, nil
+}
+
+func sanitizeWhitespace(s string) string {
+	re := regexp.MustCompile(`\s+`)
+	return re.ReplaceAllString(strings.TrimSpace(s), " ")
 }
 
 // AttachImage wires an uploaded image to an existing listing.

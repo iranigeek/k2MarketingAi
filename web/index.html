@@ -28,6 +28,10 @@
                 <span class="icon">🖼</span>
                 <span class="sidebar__label">Bildstudio</span>
             </a>
+            <a class="sidebar__item" href="#" data-view="annuals">
+                <span class="icon">📑</span>
+                <span class="sidebar__label">Årsredovisning</span>
+            </a>
             <a class="sidebar__item" href="#" data-view="templates">
                 <span class="icon">🧩</span>
                 <span class="sidebar__label">Mallar</span>
@@ -57,6 +61,7 @@
             </div>
             <div class="topbar__actions">
                 <button class="secondary" data-view-trigger="objects">Mina objekt</button>
+                <button class="secondary" data-view-trigger="annuals">Årsredovisning</button>
                 <button class="primary" data-view-trigger="generator">Skapa annons</button>
             </div>
         </header>
@@ -329,6 +334,30 @@
             </section>
         </div>
 
+        <div id="view-annuals" class="view">
+            <section class="panel annual-panel">
+                <header>
+                    <p class="eyebrow">Extrahera årsredovisningar</p>
+                    <h2>Lyft BRF-nyckeltal från PDF</h2>
+                    <p class="muted">Ladda upp årsredovisningen så får du avgift, skuldsättning, planerade åtgärder och risker att klistra in i objektbeskrivningen.</p>
+                </header>
+                <div class="annual-upload">
+                    <label class="dropzone annual-drop" id="annual-drop">
+                        <input type="file" id="annual-file" accept=".pdf,application/pdf" hidden>
+                        <p>Släpp PDF här eller klicka för att välja</p>
+                        <div class="upload-icons">
+                            <span>📄</span><span>🏠</span><span>📊</span>
+                        </div>
+                        <button type="button" class="ghost">Välj årsredovisning (PDF)</button>
+                    </label>
+                    <p id="annual-status" class="muted"></p>
+                </div>
+                <div id="annual-result" class="annual-result panel">
+                    <p class="muted">Ingen årsredovisning analyserad ännu.</p>
+                </div>
+            </section>
+        </div>
+
         <div id="view-objects" class="view view--active">
             <section class="objects-panel">
                 <div class="objects-panel__header">
@@ -526,6 +555,12 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.js"></script>
+    <script>
+        if (window['pdfjsLib']) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.js';
+        }
+    </script>
     <script src="/app.js"></script>
 </body>
 </html>
