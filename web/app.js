@@ -60,6 +60,13 @@ function enterLandingMode() {
     document.body.classList.remove('sidebar-open');
 }
 
+function redirectToLanding(message = 'Logga in eller skapa konto.') {
+    enterLandingMode();
+    hideAuthOverlay();
+    showAuthOverlay(message);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
 function setUser(user) {
     state.user = user;
     const sidebarLabel = document.getElementById('user-email-sidebar');
@@ -89,6 +96,11 @@ function hideAuthOverlay() {
     clearAuthError();
 }
 
+function closeAuthOverlay() {
+    hideAuthOverlay();
+    enterLandingMode();
+}
+
 function setAuthMode(mode) {
     state.authMode = mode;
     const loginForm = document.getElementById('login-form');
@@ -114,6 +126,20 @@ function clearAuthError() {
     if (!el) return;
     el.textContent = '';
     el.classList.add('hidden');
+}
+
+function setupAuthOverlayDismiss() {
+    const overlay = document.getElementById('auth-overlay');
+    const card = overlay?.querySelector('.auth-card');
+    if (!overlay) return;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            closeAuthOverlay();
+        }
+    });
+    if (card) {
+        card.addEventListener('click', e => e.stopPropagation());
+    }
 }
 
 async function handleLoginSubmit(e) {
@@ -194,8 +220,7 @@ async function handleLogout() {
     const sidebarLabel = document.getElementById('user-email-sidebar');
     if (sidebarLabel) sidebarLabel.textContent = 'Ej inloggad';
     resetAppData();
-    enterLandingMode();
-    showAuthOverlay('Du är utloggad.');
+    redirectToLanding('Du är utloggad.');
 }
 
 async function checkSession() {
@@ -220,8 +245,7 @@ function handleUnauthorized(message) {
     const sidebarLabel = document.getElementById('user-email-sidebar');
     if (sidebarLabel) sidebarLabel.textContent = 'Ej inloggad';
     resetAppData();
-    enterLandingMode();
-    showAuthOverlay(message);
+    redirectToLanding(message);
 }
 
 const nativeFetch = window.fetch.bind(window);
@@ -1174,8 +1198,13 @@ function bindEvents() {
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             closeSidebar();
+            const overlay = document.getElementById('auth-overlay');
+            if (overlay && !overlay.classList.contains('hidden')) {
+                closeAuthOverlay();
+            }
         }
     });
+    setupAuthOverlayDismiss();
     initSidebarState();
 }
 
