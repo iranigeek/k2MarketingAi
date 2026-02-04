@@ -909,9 +909,19 @@ body.is-landing .sidebar { display: none !important; }
                 #ffffff;
     color: #1f2933;
 }
+.landing > section {
+    max-width: 1140px;
+    margin: 0 auto;
+}
 .hero {
     padding: 26px clamp(18px, 4.5vw, 64px) 40px;
     background: linear-gradient(135deg, rgba(15, 138, 154, 0.16) 0%, rgba(248, 251, 255, 0.94) 60%, rgba(18, 167, 187, 0.18) 100%);
+}
+.hero__nav,
+.hero__grid {
+    max-width: 1140px;
+    margin: 0 auto;
+    width: calc(100% - 32px);
 }
 .hero__nav {
     display: grid;
