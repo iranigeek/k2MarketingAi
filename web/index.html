@@ -6,7 +6,117 @@
     <title>Vemra - Minskar administration för mäklare</title>
     <link rel="stylesheet" href="/styles.css">
 </head>
-<body class="sidebar-open view-objects">
+<body class="is-landing">
+    <div class="landing">
+        <header class="hero" id="hero">
+            <div class="hero__nav">
+                <div class="landing-brand">
+                    <img src="/assets/vemra-logo.svg" alt="Vemra">
+                </div>
+                <nav class="hero__links">
+                    <a href="#hero">Hem</a>
+                    <a href="#features">Funktioner</a>
+                    <a href="#how">Så funkar det</a>
+                    <a href="#cta">Starta</a>
+                </nav>
+                <div class="landing-actions">
+                    <button class="ghost" data-auth-trigger="login" type="button">Logga in</button>
+                    <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
+                </div>
+            </div>
+            <div class="hero__grid">
+                <div class="hero__copy">
+                    <p class="pill">AI för mäklare</p>
+                    <h1>Skapa objektsbeskrivningar<br><span class="accent">på under 5 minuter.</span></h1>
+                    <p class="lead">Vemra läser fakta, bilder och årsredovisning och ger dig färdiga annonser i rätt ton, med 3 alternativ på sekunder.</p>
+                    <div class="hero__buttons">
+                        <button class="primary" data-auth-trigger="register" type="button">Kom igång gratis</button>
+                        <button class="secondary" data-auth-trigger="login" type="button">Logga in</button>
+                    </div>
+                    <div class="hero__stats">
+                        <div>
+                            <strong>Under 5 min</strong>
+                            <p class="muted small">Från fakta till klar text</p>
+                        </div>
+                        <div>
+                            <strong>3</strong>
+                            <p class="muted small">Alternativ per generering</p>
+                        </div>
+                        <div>
+                            <strong>≈35 min</strong>
+                            <p class="muted small">Sparad tid per objekt</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="trust">
+            <div class="trust__item">Byggd för mäklare</div>
+            <div class="trust__item">GDPR i EU</div>
+            <div class="trust__item">PDF & bildstöd</div>
+            <div class="trust__item">Team & stilprofiler</div>
+        </section>
+
+        <section class="features" id="features">
+            <h2>Det här gör Vemra</h2>
+            <p class="lead center">En arbetsyta som ersätter manuell text, bildhantering och BRF-letande.</p>
+            <div class="features__grid">
+                <article class="feature-card">
+                    <h3>Annonsgenerator</h3>
+                    <p>Skriv in adress, välj ton och längd. Tre färdiga versioner direkt.</p>
+                </article>
+                <article class="feature-card">
+                    <h3>Bild & stil</h3>
+                    <p>Ladda upp bilder, få rumstyp och stilförslag. Koppla renderingar.</p>
+                </article>
+                <article class="feature-card">
+                    <h3>Årsredovisning</h3>
+                    <p>Plocka avgift, skuldsättning och risker från PDF på sekunder.</p>
+                </article>
+                <article class="feature-card">
+                    <h3>Versioner & mallar</h3>
+                    <p>Spara kunders ton och återanvänd. Versioner sparas bredvid texten.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="how" id="how">
+            <h2>Så funkar det</h2>
+            <p class="lead center">Tre steg – inget att installera.</p>
+            <div class="how__grid">
+                <article class="how-card">
+                    <div class="how-icon">1</div>
+                    <h3>Ladda upp</h3>
+                    <p>Bilder, planritningar eller PDF. Allt hamnar i objektet.</p>
+                </article>
+                <article class="how-card">
+                    <div class="how-icon">2</div>
+                    <h3>Välj ton</h3>
+                    <p>Säljande, lyxig eller sparad stilprofil för kunden.</p>
+                </article>
+                <article class="how-card">
+                    <div class="how-icon">3</div>
+                    <h3>Publicera</h3>
+                    <p>Kopiera, ladda ner TXT eller koppla bilder och nyckeltal.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="cta" id="cta">
+            <div>
+                <p class="pill">Baksidan av Vemra</p>
+                <h2>Logga in för att öppna ditt arbetsbord.</h2>
+                <p class="lead">Skapa konto gratis eller logga in direkt om du redan är kund.</p>
+            </div>
+            <div class="landing-buttons">
+                <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
+                <button class="ghost" data-auth-trigger="login" type="button">Logga in</button>
+            </div>
+        </section>
+    </div>
+
+    <div class="app-shell">
     <aside class="sidebar">
         <a class="sidebar__logo" href="#" data-view="objects" aria-label="Till startsidan">
             <img src="/assets/vemra-logo.svg" alt="Vemra">
@@ -503,6 +613,8 @@
         </div>
     </div>
 
+    </div> <!-- /app-shell -->
+
     <div id="auth-overlay" class="auth-overlay hidden" role="dialog" aria-modal="true">
         <div class="auth-card">
             <div class="auth-switch">
@@ -553,6 +665,8 @@
             </div>
         </div>
     </div>
+
+    </div> <!-- app-shell -->
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.js"></script>
     <script>

@@ -48,13 +48,25 @@ function listFromLines(raw) {
         .filter(Boolean);
 }
 
+function enterAppShell() {
+    document.body.classList.add('is-authenticated');
+    document.body.classList.remove('is-landing');
+    document.body.classList.add('sidebar-open');
+}
+
+function enterLandingMode() {
+    document.body.classList.add('is-landing');
+    document.body.classList.remove('is-authenticated');
+    document.body.classList.remove('sidebar-open');
+}
+
 function setUser(user) {
     state.user = user;
     const sidebarLabel = document.getElementById('user-email-sidebar');
     if (sidebarLabel) {
         sidebarLabel.textContent = user?.email || 'Inloggad';
     }
-    document.body.classList.add('is-authenticated');
+    enterAppShell();
 }
 
 function resetAppData() {
@@ -182,6 +194,7 @@ async function handleLogout() {
     const sidebarLabel = document.getElementById('user-email-sidebar');
     if (sidebarLabel) sidebarLabel.textContent = 'Ej inloggad';
     resetAppData();
+    enterLandingMode();
     showAuthOverlay('Du är utloggad.');
 }
 
@@ -198,7 +211,8 @@ async function checkSession() {
     } catch (err) {
         console.warn('Session check failed', err);
     }
-    showAuthOverlay();
+    enterLandingMode();
+    hideAuthOverlay();
 }
 
 function handleUnauthorized(message) {
@@ -206,6 +220,7 @@ function handleUnauthorized(message) {
     const sidebarLabel = document.getElementById('user-email-sidebar');
     if (sidebarLabel) sidebarLabel.textContent = 'Ej inloggad';
     resetAppData();
+    enterLandingMode();
     showAuthOverlay(message);
 }
 
@@ -998,6 +1013,16 @@ function bindEvents() {
     document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
     document.getElementById('register-form')?.addEventListener('submit', handleRegisterSubmit);
     document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
+    document.querySelectorAll('[data-auth-trigger]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.authTrigger === 'register' ? 'register' : 'login';
+            setAuthMode(mode);
+            const copy = mode === 'register'
+                ? 'Skapa konto och gå direkt till baksidan.'
+                : 'Logga in för att öppna baksidan.';
+            showAuthOverlay(copy);
+        });
+    });
 
     document.querySelectorAll('.selection-action').forEach(btn => {
         btn.addEventListener('click', () => applySelectionRewrite(btn.dataset.mode));
