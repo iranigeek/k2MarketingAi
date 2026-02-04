@@ -1039,6 +1039,28 @@ body.is-landing .sidebar { display: none !important; }
 }
 .how-card h3 { margin: 0 0 6px; }
 .how-card p { margin: 0; color: #4b5565; }
+.benefits {
+    background: #ffffff;
+    color: var(--text);
+    padding: 32px clamp(18px, 4.8vw, 64px);
+}
+.benefits h2 { margin: 0 0 6px; font-size: clamp(26px, 3.2vw, 34px); text-align: center; }
+.benefits .lead { color: #475467; margin: 0 0 14px; }
+.benefits__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+.benefit-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    background: var(--card);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+}
+.benefit-card h3 { margin: 4px 0 6px; }
+.benefit-card p { margin: 0; color: #4b5565; }
 .cta {
     border: 1px solid var(--border);
     border-radius: 14px;
