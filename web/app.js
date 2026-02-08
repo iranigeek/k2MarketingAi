@@ -27,6 +27,8 @@ const state = {
         status: '',
         result: null,
         fileName: '',
+        selectedIds: [],
+        linkStatus: '',
     },
 };
 
@@ -263,6 +265,10 @@ async function fetchListings() {
         if (!res.ok) throw new Error('Kunde inte hämta listor');
         const payload = await res.json();
         state.listings = Array.isArray(payload) ? payload : [];
+        if (Array.isArray(state.annualReport.selectedIds)) {
+            const valid = new Set(state.listings.map(item => item.id));
+            state.annualReport.selectedIds = state.annualReport.selectedIds.filter(id => valid.has(id));
+        }
         updateVolumeStats();
         updateTimeSavings();
         updateImageStats();
@@ -1881,13 +1887,33 @@ function renderAnnualResult() {
         r.renovations_planned ? `<li><strong>Planerat:</strong> ${r.renovations_planned}</li>` : '',
     ].filter(Boolean).join('');
 
-    const selected = getSelectedListing();
-    const saveBlock = selected
+    const listings = Array.isArray(state.listings) ? state.listings : [];
+    const selectedIds = Array.isArray(state.annualReport.selectedIds) ? state.annualReport.selectedIds : [];
+    const options = listings.map(item => {
+        const label = item.address || 'Namnlöst objekt';
+        const linked = item?.details?.association?.annual_report ? ' • kopplad' : '';
+        const selected = selectedIds.includes(item.id) ? ' selected' : '';
+        return `<option value="${item.id}"${selected}>${label}${linked}</option>`;
+    }).join('');
+    const hasListings = listings.length > 0;
+    const selectionStatus = state.annualReport.linkStatus
+        ? `<span class="link-status">${state.annualReport.linkStatus}</span>`
+        : '';
+    const saveBlock = hasListings
         ? `<div class="annual-save">
-                <p class="muted">Spara till objekt: <strong>${selected.address || 'Valt objekt'}</strong></p>
-                <button type="button" class="secondary" id="annual-save-btn">Spara till objekt</button>
+                <div class="annual-save__left">
+                    <p class="muted">Koppla till objekt:</p>
+                    <select id="annual-listing-select" multiple size="4" aria-label="Välj objekt att koppla årsredovisning till">
+                        ${options}
+                    </select>
+                </div>
+                <div class="annual-save__right">
+                    <button type="button" class="secondary" id="annual-save-btn">Spara koppling</button>
+                    <button type="button" class="ghost" id="annual-unlink-btn">Koppla bort</button>
+                    ${selectionStatus}
+                </div>
             </div>`
-        : `<p class="muted">Välj ett objekt i listan för att spara sammanfattningen.</p>`;
+        : `<p class="muted">Skapa eller ladda in objekt för att kunna koppla årsredovisningen.</p>`;
 
     resultEl.innerHTML = `
         <div class="annual-badges">${badges}</div>
@@ -1914,9 +1940,26 @@ function renderAnnualResult() {
         ${saveBlock}
     `;
 
-    const saveBtn = document.getElementById('annual-save-btn');
-    if (saveBtn && selected) {
-        saveBtn.addEventListener('click', () => saveAnnualReportToListing(selected.id));
+    if (hasListings) {
+        const selectEl = document.getElementById('annual-listing-select');
+        if (selectEl) {
+            selectEl.addEventListener('change', () => {
+                const selected = Array.from(selectEl.selectedOptions || []).map(opt => opt.value);
+                state.annualReport.selectedIds = selected;
+                state.annualReport.linkStatus = selected.length
+                    ? `Valt ${selected.length} objekt.`
+                    : 'Inget objekt valt.';
+                renderAnnualResult();
+            });
+        }
+        const saveBtn = document.getElementById('annual-save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => saveAnnualReportToListings());
+        }
+        const unlinkBtn = document.getElementById('annual-unlink-btn');
+        if (unlinkBtn) {
+            unlinkBtn.addEventListener('click', () => unlinkAnnualReportFromListings());
+        }
     }
 }
 
@@ -1927,32 +1970,90 @@ function getSelectedListing() {
     return state.listings.find(item => item.id === id) || null;
 }
 
-async function saveAnnualReportToListing(id) {
-    if (!id || !state.annualReport.result) return;
-    state.annualReport.status = 'Sparar sammanfattning till objektet...';
+async function saveAnnualReportToListings() {
+    const ids = Array.isArray(state.annualReport.selectedIds) ? state.annualReport.selectedIds : [];
+    if (!ids.length || !state.annualReport.result) {
+        state.annualReport.linkStatus = 'Välj minst ett objekt först.';
+        renderAnnualResult();
+        return;
+    }
+    state.annualReport.status = ids.length === 1
+        ? 'Sparar sammanfattning till objektet...'
+        : `Sparar sammanfattning till ${ids.length} objekt...`;
     renderAnnualResult();
     try {
-        const res = await fetch(`/api/listings/${id}/annual-report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(state.annualReport.result),
+        const results = await Promise.all(ids.map(async id => {
+            const res = await fetch(`/api/listings/${id}/annual-report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state.annualReport.result),
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Kunde inte spara sammanfattningen');
+            }
+            return res.json();
+        }));
+        results.forEach(updated => {
+            const idx = state.listings.findIndex(item => item.id === updated.id);
+            if (idx !== -1) {
+                state.listings[idx] = updated;
+            } else {
+                state.listings.unshift(updated);
+            }
+            if (state.current && state.current.id === updated.id) {
+                state.current = updated;
+            }
         });
-        if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(txt || 'Kunde inte spara sammanfattningen');
-        }
-        const updated = await res.json();
-        state.annualReport.status = 'Sammanfattning sparad till objektet.';
-        state.current = updated;
-        const idx = state.listings.findIndex(item => item.id === updated.id);
-        if (idx !== -1) {
-            state.listings[idx] = updated;
-        }
+        state.annualReport.status = 'Koppling sparad.';
+        state.annualReport.linkStatus = `Kopplat till ${ids.length} objekt.`;
         renderDetail();
         renderObjectList();
         renderAnnualResult();
     } catch (err) {
         state.annualReport.status = err.message || 'Misslyckades med att spara sammanfattningen.';
+        renderAnnualResult();
+    }
+}
+
+async function unlinkAnnualReportFromListings() {
+    const ids = Array.isArray(state.annualReport.selectedIds) ? state.annualReport.selectedIds : [];
+    if (!ids.length) {
+        state.annualReport.linkStatus = 'Välj minst ett objekt att koppla bort.';
+        renderAnnualResult();
+        return;
+    }
+    state.annualReport.status = ids.length === 1
+        ? 'Kopplar bort årsredovisningen från objektet...'
+        : `Kopplar bort årsredovisningen från ${ids.length} objekt...`;
+    renderAnnualResult();
+    try {
+        const results = await Promise.all(ids.map(async id => {
+            const res = await fetch(`/api/listings/${id}/annual-report`, { method: 'DELETE' });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Kunde inte koppla bort årsredovisningen');
+            }
+            return res.json();
+        }));
+        results.forEach(updated => {
+            const idx = state.listings.findIndex(item => item.id === updated.id);
+            if (idx !== -1) {
+                state.listings[idx] = updated;
+            } else {
+                state.listings.unshift(updated);
+            }
+            if (state.current && state.current.id === updated.id) {
+                state.current = updated;
+            }
+        });
+        state.annualReport.status = 'Koppling borttagen.';
+        state.annualReport.linkStatus = `Koppling borttagen för ${ids.length} objekt.`;
+        renderDetail();
+        renderObjectList();
+        renderAnnualResult();
+    } catch (err) {
+        state.annualReport.status = err.message || 'Misslyckades med att koppla bort årsredovisningen.';
         renderAnnualResult();
     }
 }

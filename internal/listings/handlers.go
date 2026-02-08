@@ -1318,6 +1318,9 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 		return "", fmt.Errorf("tesseract hittades inte")
 	}
 
+	ocrCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	defer cancel()
+
 	lang := "swe+eng"
 	if langs, err := listTesseractLangs(ctx); err == nil && len(langs) > 0 {
 		hasSwe := false
@@ -1376,8 +1379,6 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 	}
 
 	if _, err := exec.LookPath("pdftoppm"); err == nil {
-		ocrCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-		defer cancel()
 		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR (pages=%d, dpi=50)", maxPages)
 		prefix := filepath.Join(dir, "page")
 		args := []string{"-r", "50", "-png", pdfPath, prefix}
@@ -1676,6 +1677,47 @@ func (h Handler) AttachAnnualReport(w http.ResponseWriter, r *http.Request) {
 	if listing.Details.Association.RenovationsPlanned == "" && req.RenovationsPlanned != "" {
 		listing.Details.Association.RenovationsPlanned = req.RenovationsPlanned
 	}
+
+	updated, err := h.Store.UpdateListingDetails(r.Context(), id, listing.Details, listing.ImageURL)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	hydrateDetailsFromLegacy(&updated)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&updated})
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+	h.publishListing(updated)
+}
+
+// DetachAnnualReport clears the annual report summary from the listing details.
+func (h Handler) DetachAnnualReport(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	listing.Details.Association.AnnualReport = nil
 
 	updated, err := h.Store.UpdateListingDetails(r.Context(), id, listing.Details, listing.ImageURL)
 	if err != nil {
