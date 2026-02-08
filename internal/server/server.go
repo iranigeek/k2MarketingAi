@@ -52,6 +52,7 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 					r.Get("/", listingHandler.Get)
 					r.Post("/images", listingHandler.AttachImage)
 					r.Post("/annual-report", listingHandler.AttachAnnualReport)
+					r.Delete("/annual-report", listingHandler.DetachAnnualReport)
 					r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
 					r.Patch("/sections/{slug}", listingHandler.UpdateSection)
 					r.Delete("/sections/{slug}", listingHandler.DeleteSection)
