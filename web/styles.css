@@ -1209,12 +1209,20 @@ body.is-landing .sidebar { display: none !important; }
     padding: 16px;
 }
 .product-card {
-    text-align: left;
+    text-align: center;
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid #ddd8d0;
+    box-shadow: none;
 }
 .product-meta {
     margin-top: 10px;
     color: #4b5565;
     font-weight: 700;
+    font-size: 18px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    text-align: center;
 }
 .benefit-card {
     text-align: center;
@@ -1223,14 +1231,13 @@ body.is-landing .sidebar { display: none !important; }
 .feature-card h3,
 .product-card h3,
 .feature-card p,
-.product-card p,
 .benefit-card h3,
 .benefit-card p {
     text-align: center;
 }
 .product-card h3,
 .product-card p {
-    text-align: left;
+    text-align: center;
 }
 .feature-card h3,
 .product-card h3,
@@ -1242,7 +1249,6 @@ body.is-landing .sidebar { display: none !important; }
     font-size: 17px;
 }
 .feature-card p,
-.product-card p,
 .how-card p,
 .workflow-step p,
 .benefit-card p {
@@ -1284,6 +1290,17 @@ body.is-landing .sidebar { display: none !important; }
 }
 .security {
     background: #ffffff;
+    text-align: center;
+}
+.product-card h3 {
+    font-size: 17px;
+    margin-bottom: 6px;
+}
+.product-card p {
+    margin: 0;
+    color: #5b6472;
+    font-size: inherit;
+    line-height: 1.7;
     text-align: center;
 }
 .security__grid {
