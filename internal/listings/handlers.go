@@ -8,9 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -166,7 +170,7 @@ func callLLMWithRetry(ctx context.Context, client llm.Client, msgs []llm.ChatMes
 func applyAnnualMap(summary *AnnualReportSummary, m map[string]any) {
 	set := func(dst *string, key string) {
 		if v, ok := m[key]; ok && v != nil {
-			*dst = fmt.Sprint(v)
+			*dst = formatAnnualValue(key, v)
 		}
 	}
 	set(&summary.OrgNumber, "org_number")
@@ -196,8 +200,172 @@ func applyAnnualMap(summary *AnnualReportSummary, m map[string]any) {
 	set(&summary.BoardComments, "board_comments")
 	set(&summary.Summary, "summary")
 	if v, ok := m["extraction_confidence"]; ok && v != nil {
-		summary.ExtractionConfidence = fmt.Sprint(v)
+		summary.ExtractionConfidence = formatAnnualValue("extraction_confidence", v)
 	}
+}
+
+var annualNumericRe = regexp.MustCompile(`^[+-]?[0-9]+([.,][0-9]+)?([eE][+-]?[0-9]+)?$`)
+
+var annualMoneyPrefixKeys = map[string]struct{}{
+	"debt_credit_total": {},
+	"cash_and_bank":     {},
+	"net_result":        {},
+	"interest_costs":    {},
+	"depreciation":      {},
+	"fee_income":        {},
+	"rental_income":     {},
+	"total_debt":        {},
+	"liquidity":         {},
+}
+
+var annualMoneyPlainKeys = map[string]struct{}{
+	"fee_per_month": {},
+}
+
+var annualPerSqmKeys = map[string]struct{}{
+	"debt_per_sqm": {},
+}
+
+var annualAreaKeys = map[string]struct{}{
+	"boa_total": {},
+	"loa_total": {},
+}
+
+func formatAnnualValue(key string, v any) string {
+	switch t := v.(type) {
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" {
+			return ""
+		}
+		if annualNumericRe.MatchString(s) {
+			if n, ok := parseAnnualNumber(s); ok {
+				return formatAnnualNumber(key, n)
+			}
+		}
+		return s
+	default:
+		if n, ok := toFloat64(v); ok {
+			return formatAnnualNumber(key, n)
+		}
+		return fmt.Sprint(v)
+	}
+}
+
+func parseAnnualNumber(s string) (float64, bool) {
+	clean := strings.ReplaceAll(s, ",", ".")
+	n, err := strconv.ParseFloat(clean, 64)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func toFloat64(v any) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case float32:
+		return float64(t), true
+	case int:
+		return float64(t), true
+	case int64:
+		return float64(t), true
+	case int32:
+		return float64(t), true
+	case int16:
+		return float64(t), true
+	case int8:
+		return float64(t), true
+	case uint:
+		return float64(t), true
+	case uint64:
+		return float64(t), true
+	case uint32:
+		return float64(t), true
+	case uint16:
+		return float64(t), true
+	case uint8:
+		return float64(t), true
+	case json.Number:
+		if n, err := t.Float64(); err == nil {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func formatAnnualNumber(key string, n float64) string {
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return fmt.Sprint(n)
+	}
+	if _, ok := annualMoneyPrefixKeys[key]; ok {
+		return formatMoneyWithPrefix(n)
+	}
+	if _, ok := annualMoneyPlainKeys[key]; ok {
+		return fmt.Sprintf("%s kr", formatNumberSE(n, 0))
+	}
+	if _, ok := annualPerSqmKeys[key]; ok {
+		return fmt.Sprintf("%s kr/kvm", formatNumberSE(n, 0))
+	}
+	if _, ok := annualAreaKeys[key]; ok {
+		return fmt.Sprintf("%s kvm", formatNumberSE(n, 0))
+	}
+	return formatNumberSE(n, 0)
+}
+
+func formatMoneyWithPrefix(n float64) string {
+	sign := ""
+	if n < 0 {
+		sign = "-"
+		n = -n
+	}
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%s%s Mkr", sign, formatNumberSE(n/1_000_000, 2))
+	case n >= 1_000:
+		return fmt.Sprintf("%s%s tkr", sign, formatNumberSE(n/1_000, 0))
+	default:
+		return fmt.Sprintf("%s%s kr", sign, formatNumberSE(n, 0))
+	}
+}
+
+func formatNumberSE(n float64, decimals int) string {
+	abs := math.Abs(n)
+	s := fmt.Sprintf("%.*f", decimals, abs)
+	parts := strings.SplitN(s, ".", 2)
+	intPart := addThousandsSep(parts[0])
+	if decimals == 0 {
+		if n < 0 {
+			return "-" + intPart
+		}
+		return intPart
+	}
+	frac := "00"
+	if len(parts) == 2 {
+		frac = parts[1]
+	}
+	if n < 0 {
+		return "-" + intPart + "," + frac
+	}
+	return intPart + "," + frac
+}
+
+func addThousandsSep(s string) string {
+	if len(s) <= 3 {
+		return s
+	}
+	var b strings.Builder
+	rem := len(s) % 3
+	if rem == 0 {
+		rem = 3
+	}
+	b.WriteString(s[:rem])
+	for i := rem; i < len(s); i += 3 {
+		b.WriteByte(' ')
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
 }
 
 // Create handles POST /api/listings.
@@ -361,6 +529,9 @@ func (h Handler) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if listings == nil {
+		listings = []storage.Listing{}
 	}
 
 	pointers := make([]*storage.Listing, len(listings))
@@ -775,41 +946,7 @@ func (h Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 }
 
 // AnnualReportSummary captures the key insights extracted from a BRF årsredovisning.
-type AnnualReportSummary struct {
-	Summary            string `json:"summary"`
-	FeePerMonth        string `json:"fee_per_month"`
-	DebtPerSqm         string `json:"debt_per_sqm"`
-	TotalDebt          string `json:"total_debt"`
-	Liquidity          string `json:"liquidity"`
-	PlannedMaintenance string `json:"planned_maintenance"`
-	NotableRisks       string `json:"notable_risks"`
-	EnergyClass        string `json:"energy_class"`
-	EnergyConsumption  string `json:"energy_consumption"`
-	BoardComments      string `json:"board_comments"`
-	// Nyckeltal efterfrågade
-	OrgNumber            string `json:"org_number"`
-	PropertyDesignation  string `json:"property_designation"`
-	BuildYear            string `json:"build_year"`
-	BoaTotal             string `json:"boa_total"`
-	LoaTotal             string `json:"loa_total"`
-	DebtCreditTotal      string `json:"debt_credit_total"`
-	CashAndBank          string `json:"cash_and_bank"`
-	NetResult            string `json:"net_result"`
-	InterestCosts        string `json:"interest_costs"`
-	Depreciation         string `json:"depreciation"`
-	FeeIncome            string `json:"fee_income"`
-	RentalIncome         string `json:"rental_income"`
-	LandStatus           string `json:"land_status"`
-	LandLeaseExpiry      string `json:"land_lease_expiry"`
-	RenovationsDone      string `json:"renovations_done"`
-	RenovationsPlanned   string `json:"renovations_planned"`
-	SourcePageCount      int    `json:"source_pages"`
-	CharactersAnalysed   int    `json:"characters_analysed"`
-	ExtractionModel      string `json:"extraction_model"`
-	ExtractionConfidence string `json:"extraction_confidence,omitempty"`
-	FileName             string `json:"file_name,omitempty"`
-	InputKind            string `json:"input_kind,omitempty"` // pdf-upload | text-client
-}
+type AnnualReportSummary = storage.AnnualReportSummary
 
 const maxAnnualBytes = 15 * 1024 * 1024 // 15 MB
 const maxAnnualPages = 40
@@ -854,7 +991,7 @@ func (h Handler) ExtractAnnualReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pageText, pageCount, err := extractPDFText(data, maxAnnualPages) // läs fler sidor för att hitta nyckeltal
+	pageText, pageCount, err := extractPDFText(r.Context(), data, maxAnnualPages) // läs fler sidor för att hitta nyckeltal
 	if err != nil || strings.TrimSpace(pageText) == "" {
 		msg := "kunde inte läsa PDF (ingen text hittades – exportera som textbaserad PDF eller kör OCR)."
 		if err != nil {
@@ -869,6 +1006,7 @@ func (h Handler) ExtractAnnualReport(w http.ResponseWriter, r *http.Request) {
 	if len(sanitized) > maxAnnualChars {
 		sanitized = sanitized[:maxAnnualChars]
 	}
+	log.Printf("annual: extracted chars=%d financeSignals=%v", len(sanitized), hasAnnualFinanceSignals(sanitized))
 	logAnnualEvent("text prepared file=%s pages=%d chars=%d", header.Filename, pageCount, len(sanitized))
 
 	summary := AnnualReportSummary{
@@ -980,6 +1118,12 @@ func (h Handler) SummarizeAnnualReport(w http.ResponseWriter, r *http.Request) {
 	if len(sanitized) > 12000 {
 		sanitized = sanitized[:12000]
 	}
+	if !hasAnnualFinanceSignals(sanitized) {
+		msg := "Underlaget verkar vara en signeringslogg eller saknar finansiell data. Ladda upp själva årsredovisningen (balans-/resultaträkning, noter eller förvaltningsberättelse)."
+		logAnnualEvent("annual data missing: %s", msg)
+		http.Error(w, msg, http.StatusUnprocessableEntity)
+		return
+	}
 
 	summary := AnnualReportSummary{
 		SourcePageCount:    req.Pages,
@@ -1051,7 +1195,7 @@ Returnera JSON med följande nycklar:
 	_ = json.NewEncoder(w).Encode(summary)
 }
 
-func extractPDFText(data []byte, maxPages int) (string, int, error) {
+func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int, error) {
 	reader, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return "", 0, err
@@ -1095,15 +1239,237 @@ func extractPDFText(data []byte, maxPages int) (string, int, error) {
 		b.WriteString("\n\n")
 	}
 	out := strings.TrimSpace(b.String())
-	if out == "" {
+	if out != "" {
+		if !hasAnnualFinanceSignals(out) {
+			logAnnualEvent("text found but missing finance signals; trying OCR fallback")
+			log.Printf("annual: text found but missing finance signals; trying OCR fallback")
+			ocrText, ocrErr := ocrPDFText(ctx, data, readPages)
+			if ocrErr == nil && strings.TrimSpace(ocrText) != "" {
+				logAnnualEvent("ocr fallback ok: chars=%d head=%q", len(ocrText), firstN(ocrText, 200))
+				log.Printf("annual: ocr fallback ok: chars=%d", len(ocrText))
+				return ocrText, readPages, nil
+			}
+			if ocrErr != nil {
+				logAnnualEvent("ocr fallback failed: %v", ocrErr)
+				log.Printf("annual: ocr fallback failed: %v", ocrErr)
+			}
+		}
+		return out, readPages, nil
+	}
+
+	logAnnualEvent("no text extracted; trying OCR")
+	log.Printf("annual: no text extracted; trying OCR")
+	ocrText, ocrErr := ocrPDFText(ctx, data, readPages)
+	if ocrErr != nil || strings.TrimSpace(ocrText) == "" {
+		if ocrErr != nil {
+			return "", readPages, fmt.Errorf("ingen extraherbar text i PDF:en (lästa sidor: %d). OCR misslyckades: %v", readPages, ocrErr)
+		}
 		return "", readPages, fmt.Errorf("ingen extraherbar text i PDF:en (lästa sidor: %d)", readPages)
 	}
-	return out, readPages, nil
+	return ocrText, readPages, nil
+}
+
+func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) {
+	if _, err := exec.LookPath("tesseract"); err != nil {
+		return "", fmt.Errorf("tesseract hittades inte")
+	}
+
+	lang := "swe+eng"
+	if langs, err := listTesseractLangs(ctx); err == nil && len(langs) > 0 {
+		hasSwe := false
+		hasEng := false
+		for _, l := range langs {
+			if l == "swe" {
+				hasSwe = true
+			}
+			if l == "eng" {
+				hasEng = true
+			}
+		}
+		switch {
+		case hasSwe && hasEng:
+			lang = "swe+eng"
+		case hasSwe:
+			lang = "swe"
+		case hasEng:
+			lang = "eng"
+		default:
+			lang = "eng"
+		}
+	}
+
+	dir, err := os.MkdirTemp("", "annual-ocr-*")
+	if err != nil {
+		return "", fmt.Errorf("kunde inte skapa temp-katalog: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	pdfPath := filepath.Join(dir, "input.pdf")
+	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
+		return "", fmt.Errorf("kunde inte skriva temp-pdf: %w", err)
+	}
+
+	ocrCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	if _, err := exec.LookPath("ocrmypdf"); err == nil {
+		log.Printf("annual: ocrmypdf detected, attempting searchable conversion")
+		text, err := ocrmypdfSidecarText(ocrCtx, pdfPath, lang)
+		if err == nil && strings.TrimSpace(text) != "" {
+			log.Printf("annual: ocrmypdf ok, chars=%d", len(text))
+			return sanitizeWhitespace(text), nil
+		}
+		if err != nil {
+			log.Printf("annual: ocrmypdf failed: %v", err)
+		} else {
+			log.Printf("annual: ocrmypdf returned empty text")
+		}
+	}
+
+	if _, err := exec.LookPath("pdftoppm"); err == nil {
+		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR")
+		prefix := filepath.Join(dir, "page")
+		args := []string{"-r", "300", "-png", pdfPath, prefix}
+		if maxPages > 0 {
+			args = []string{"-r", "300", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
+		}
+		if out, err := exec.CommandContext(ocrCtx, "pdftoppm", args...).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("pdftoppm fel: %w (%s)", err, strings.TrimSpace(string(out)))
+		}
+
+		images, _ := filepath.Glob(prefix + "-*.png")
+		if len(images) == 0 {
+			return "", fmt.Errorf("pdftoppm skapade inga bilder")
+		}
+		sort.Strings(images)
+		var b strings.Builder
+		for _, img := range images {
+			out, err := exec.CommandContext(ocrCtx, "tesseract", img, "stdout", "-l", lang, "--dpi", "300").Output()
+			if err != nil {
+				continue
+			}
+			if txt := strings.TrimSpace(string(out)); txt != "" {
+				b.WriteString(txt)
+				b.WriteString("\n\n")
+			}
+		}
+		if strings.TrimSpace(b.String()) == "" {
+			return "", fmt.Errorf("tesseract gav ingen text från bilderna")
+		}
+		log.Printf("annual: tesseract image OCR ok, chars=%d", len(b.String()))
+		return sanitizeWhitespace(b.String()), nil
+	}
+
+	// Fallback: prova tesseract direkt på PDF (inte alltid stöds beroende på build)
+	cmd := exec.CommandContext(ocrCtx, "tesseract", pdfPath, "stdout", "-l", lang, "--dpi", "300")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("tesseract fel: %w (tips: installera poppler för pdftoppm)", err)
+	}
+	if strings.TrimSpace(string(out)) == "" {
+		return "", fmt.Errorf("ingen OCR-text (tips: installera poppler för pdftoppm eller ocrmypdf)")
+	}
+	return sanitizeWhitespace(string(out)), nil
+}
+
+func ocrmypdfSidecarText(ctx context.Context, pdfPath, lang string) (string, error) {
+	dir := filepath.Dir(pdfPath)
+	outPDF := filepath.Join(dir, "ocr.pdf")
+	sidecar := filepath.Join(dir, "ocr.txt")
+	args := []string{
+		"-l", lang,
+		"--skip-text",
+		"--sidecar", sidecar,
+		pdfPath, outPDF,
+	}
+	out, err := exec.CommandContext(ctx, "ocrmypdf", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("ocrmypdf fel: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	data, err := os.ReadFile(sidecar)
+	if err != nil {
+		return "", fmt.Errorf("ocrmypdf sidecar saknas: %w", err)
+	}
+	return string(data), nil
+}
+
+func listTesseractLangs(ctx context.Context) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "tesseract", "--list-langs")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(out), "\n")
+	var langs []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "List of available languages") {
+			continue
+		}
+		langs = append(langs, line)
+	}
+	return langs, nil
 }
 
 func sanitizeWhitespace(s string) string {
 	re := regexp.MustCompile(`\s+`)
 	return re.ReplaceAllString(strings.TrimSpace(s), " ")
+}
+
+func hasAnnualFinanceSignals(text string) bool {
+	lower := strings.ToLower(text)
+	if lower == "" {
+		return false
+	}
+	// Explicitly treat signing logs as non-financial unless strong signals exist.
+	if strings.Contains(lower, "signeringslogg") || strings.Contains(lower, "signeringslog") {
+		if !strings.Contains(lower, "balansräkning") && !strings.Contains(lower, "resultaträkning") && !strings.Contains(lower, "kassaflödesanalys") {
+			return false
+		}
+	}
+
+	strongSignals := []string{
+		"balansräkning",
+		"resultaträkning",
+		"kassaflödesanalys",
+		"förvaltningsberättelse",
+		"rörelseresultat",
+		"räntekost",
+		"avskriv",
+		"likvida medel",
+		"skulder",
+		"tillgångar",
+		"eget kapital",
+		"noter",
+		"årsavgifter",
+		"omsättning",
+		"rörelseintäkter",
+		"driftskostnader",
+		"förvaltningskostnader",
+	}
+	for _, sig := range strongSignals {
+		if strings.Contains(lower, sig) {
+			return true
+		}
+	}
+
+	// Numeric money patterns (e.g. 1 234 567 kr, 3,4 Mkr, 850 tkr).
+	moneyRe := regexp.MustCompile(`(?i)\b\d{1,3}(?:[ .]\d{3})+(?:[.,]\d+)?\s*(kr|tkr|mkr)\b|\b\d+[.,]?\d*\s*(kr|tkr|mkr)\b`)
+	if moneyRe.MatchString(lower) {
+		return true
+	}
+
+	// As a last fallback, require multiple numeric lines + finance terms.
+	digitCount := 0
+	for _, ch := range lower {
+		if ch >= '0' && ch <= '9' {
+			digitCount++
+		}
+	}
+	if digitCount >= 30 && (strings.Contains(lower, "kr") || strings.Contains(lower, "tkr") || strings.Contains(lower, "mkr")) {
+		return true
+	}
+	return false
 }
 
 // AttachImage wires an uploaded image to an existing listing.
@@ -1185,6 +1551,62 @@ func (h Handler) AttachImage(w http.ResponseWriter, r *http.Request) {
 	h.publishListing(updated)
 }
 
+// AttachAnnualReport saves an annual report summary to the listing details.
+func (h Handler) AttachAnnualReport(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	var req storage.AnnualReportSummary
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	listing, err := h.fetchListingForUser(r.Context(), id, user.ID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	listing.Details.Association.AnnualReport = &req
+	if listing.Details.Association.FinancialSummary == "" && req.Summary != "" {
+		listing.Details.Association.FinancialSummary = req.Summary
+	}
+	if listing.Details.Association.RenovationsDone == "" && req.RenovationsDone != "" {
+		listing.Details.Association.RenovationsDone = req.RenovationsDone
+	}
+	if listing.Details.Association.RenovationsPlanned == "" && req.RenovationsPlanned != "" {
+		listing.Details.Association.RenovationsPlanned = req.RenovationsPlanned
+	}
+
+	updated, err := h.Store.UpdateListingDetails(r.Context(), id, listing.Details, listing.ImageURL)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	hydrateDetailsFromLegacy(&updated)
+	h.attachStyleProfiles(r.Context(), []*storage.Listing{&updated})
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+	h.publishListing(updated)
+}
+
 // StreamEvents streams status updates over SSE.
 func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	user, ok := currentUser(w, r)
@@ -1236,6 +1658,9 @@ func (h Handler) ListStyleProfiles(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if profiles == nil {
+		profiles = []storage.StyleProfile{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(profiles)

@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultReadTimeout  = 30 * time.Second
-	defaultWriteTimeout = 2 * time.Minute
+	defaultWriteTimeout = 4 * time.Minute
 )
 
 // New constructs the HTTP server with routes and middleware.
@@ -51,6 +51,7 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", listingHandler.Get)
 					r.Post("/images", listingHandler.AttachImage)
+					r.Post("/annual-report", listingHandler.AttachAnnualReport)
 					r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
 					r.Patch("/sections/{slug}", listingHandler.UpdateSection)
 					r.Delete("/sections/{slug}", listingHandler.DeleteSection)

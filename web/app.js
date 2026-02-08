@@ -261,7 +261,8 @@ async function fetchListings() {
     try {
         const res = await fetch('/api/listings/');
         if (!res.ok) throw new Error('Kunde inte hämta listor');
-        state.listings = await res.json();
+        const payload = await res.json();
+        state.listings = Array.isArray(payload) ? payload : [];
         updateVolumeStats();
         updateTimeSavings();
         updateImageStats();
@@ -288,7 +289,8 @@ async function fetchStyleProfiles() {
     try {
         const res = await fetch('/api/style-profiles/');
         if (!res.ok) throw new Error('Kunde inte hämta stilprofiler');
-        state.styleProfiles = await res.json();
+        const payload = await res.json();
+        state.styleProfiles = Array.isArray(payload) ? payload : [];
         renderStyleProfileOptions();
         renderStyleProfileList();
     } catch (err) {
@@ -409,6 +411,7 @@ function renderDetail() {
         if (coverEl) coverEl.classList.add('hidden');
         if (galleryEl) galleryEl.classList.add('hidden');
         renderVisionInsights(null);
+        renderAnnualInsights(null);
         return;
     }
 
@@ -445,6 +448,7 @@ function renderDetail() {
     }
     renderVersions();
     renderVisionInsights(detail);
+    renderAnnualInsights(detail);
 }
 
 function getFullCopy(detail) {
@@ -515,6 +519,81 @@ function renderVisionInsights(detail) {
             tagsEl.appendChild(badge);
         });
     }
+}
+
+function renderAnnualInsights(detail) {
+    const container = document.getElementById('annual-insights');
+    if (!container) return;
+    const report = detail?.details?.association?.annual_report;
+    const hasContent = report && Object.values(report).some(val => val && String(val).trim() !== '');
+    if (!hasContent) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    const badges = [
+        report.source_pages ? `<span class="annual-badge">${report.source_pages} sidor</span>` : '',
+        report.characters_analysed ? `<span class="annual-badge">${report.characters_analysed} tecken</span>` : '',
+        report.file_name ? `<span class="annual-badge">${report.file_name}</span>` : '',
+    ].filter(Boolean).join('');
+
+    const bullets = [
+        report.summary ? `<li>${report.summary}</li>` : '',
+        report.fee_per_month ? `<li><strong>Avgift:</strong> ${report.fee_per_month}</li>` : '',
+        report.debt_per_sqm ? `<li><strong>Skuld/kvm:</strong> ${report.debt_per_sqm}</li>` : '',
+        report.total_debt ? `<li><strong>Totala skulder:</strong> ${report.total_debt}</li>` : '',
+        report.liquidity ? `<li><strong>Likviditet:</strong> ${report.liquidity}</li>` : '',
+        report.planned_maintenance ? `<li><strong>Planerat underhåll:</strong> ${report.planned_maintenance}</li>` : '',
+        report.notable_risks ? `<li><strong>Risker:</strong> ${report.notable_risks}</li>` : '',
+    ].filter(Boolean).join('');
+
+    const keyLines = [
+        ['Org.nr', report.org_number],
+        ['Fastighetsbeteckning', report.property_designation],
+        ['Byggår', report.build_year],
+        ['BOA', report.boa_total],
+        ['LOA', report.loa_total],
+        ['Skulder till kreditinstitut', report.debt_credit_total],
+        ['Kassa & bank', report.cash_and_bank],
+        ['Årets resultat', report.net_result],
+        ['Räntekostnader', report.interest_costs],
+        ['Avskrivningar', report.depreciation],
+        ['Intäkter årsavgifter', report.fee_income],
+        ['Intäkter lokaler', report.rental_income],
+        ['Markägande', report.land_status],
+        ['Avgäld utgång', report.land_lease_expiry],
+    ].filter(([, val]) => val);
+
+    const reno = [
+        report.renovations_done ? `<li><strong>Utfört:</strong> ${report.renovations_done}</li>` : '',
+        report.renovations_planned ? `<li><strong>Planerat:</strong> ${report.renovations_planned}</li>` : '',
+    ].filter(Boolean).join('');
+
+    container.classList.remove('hidden');
+    container.innerHTML = `
+        <div class="annual-badges">${badges}</div>
+        <div class="annual-grid">
+            <div class="annual-card">
+                <strong>Årsredovisning</strong>
+                <ul>${bullets || '<li>Inga nyckeltal hittades.</li>'}</ul>
+            </div>
+            <div class="annual-card">
+                <strong>Styrelsens kommentarer</strong>
+                <p>${report.board_comments || '—'}</p>
+            </div>
+            <div class="annual-card">
+                <strong>Association & ekonomi</strong>
+                <ul>
+                    ${keyLines.map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`).join('') || '<li>—</li>'}
+                </ul>
+            </div>
+            <div class="annual-card">
+                <strong>Renoveringar</strong>
+                <ul>${reno || '<li>—</li>'}</ul>
+            </div>
+        </div>
+    `;
 }
 
 async function handleVisionAnalyze(event) {
@@ -1703,7 +1782,7 @@ async function uploadMediaFile(file, timeoutMs = 30000) {
     }
 }
 
-async function extractAnnualReport(file, timeoutMs = 90000) {
+async function extractAnnualReport(file, timeoutMs = 180000) {
     if (!file) return;
     state.annualReport.status = 'Analyserar årsredovisningen...';
     renderAnnualResult();
@@ -1802,6 +1881,14 @@ function renderAnnualResult() {
         r.renovations_planned ? `<li><strong>Planerat:</strong> ${r.renovations_planned}</li>` : '',
     ].filter(Boolean).join('');
 
+    const selected = getSelectedListing();
+    const saveBlock = selected
+        ? `<div class="annual-save">
+                <p class="muted">Spara till objekt: <strong>${selected.address || 'Valt objekt'}</strong></p>
+                <button type="button" class="secondary" id="annual-save-btn">Spara till objekt</button>
+            </div>`
+        : `<p class="muted">Välj ett objekt i listan för att spara sammanfattningen.</p>`;
+
     resultEl.innerHTML = `
         <div class="annual-badges">${badges}</div>
         <div class="annual-grid">
@@ -1824,7 +1911,50 @@ function renderAnnualResult() {
                 <ul>${reno || '<li>—</li>'}</ul>
             </div>
         </div>
+        ${saveBlock}
     `;
+
+    const saveBtn = document.getElementById('annual-save-btn');
+    if (saveBtn && selected) {
+        saveBtn.addEventListener('click', () => saveAnnualReportToListing(selected.id));
+    }
+}
+
+function getSelectedListing() {
+    const id = state.selectedId;
+    if (!id) return null;
+    if (state.current && state.current.id === id) return state.current;
+    return state.listings.find(item => item.id === id) || null;
+}
+
+async function saveAnnualReportToListing(id) {
+    if (!id || !state.annualReport.result) return;
+    state.annualReport.status = 'Sparar sammanfattning till objektet...';
+    renderAnnualResult();
+    try {
+        const res = await fetch(`/api/listings/${id}/annual-report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state.annualReport.result),
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Kunde inte spara sammanfattningen');
+        }
+        const updated = await res.json();
+        state.annualReport.status = 'Sammanfattning sparad till objektet.';
+        state.current = updated;
+        const idx = state.listings.findIndex(item => item.id === updated.id);
+        if (idx !== -1) {
+            state.listings[idx] = updated;
+        }
+        renderDetail();
+        renderObjectList();
+        renderAnnualResult();
+    } catch (err) {
+        state.annualReport.status = err.message || 'Misslyckades med att spara sammanfattningen.';
+        renderAnnualResult();
+    }
 }
 
 async function tryClientPdfExtraction(file) {
@@ -1944,7 +2074,8 @@ function updateVolumeStats() {
     const weekEl = document.getElementById('stat-week');
     const monthEl = document.getElementById('stat-month');
 
-    const total = state.listings.length;
+    const listings = Array.isArray(state.listings) ? state.listings : [];
+    const total = listings.length;
     const week = countListingsWithinDays(7);
     const month = countListingsWithinDays(30);
 

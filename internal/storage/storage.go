@@ -153,14 +153,51 @@ type PropertyInfo struct {
 
 // AssociationInfo describes the HOA or property association.
 type AssociationInfo struct {
-	Name               string `json:"name"`
-	Type               string `json:"type"`
-	FinancialSummary   string `json:"financial_summary"`
-	DebtPerSquareMeter int    `json:"debt_per_square_meter"`
-	CommonAreas        string `json:"common_areas"`
-	RenovationsDone    string `json:"renovations_done"`
-	RenovationsPlanned string `json:"renovations_planned"`
-	AdditionalInfo     string `json:"additional_info"`
+	Name               string               `json:"name"`
+	Type               string               `json:"type"`
+	FinancialSummary   string               `json:"financial_summary"`
+	DebtPerSquareMeter int                  `json:"debt_per_square_meter"`
+	CommonAreas        string               `json:"common_areas"`
+	RenovationsDone    string               `json:"renovations_done"`
+	RenovationsPlanned string               `json:"renovations_planned"`
+	AdditionalInfo     string               `json:"additional_info"`
+	AnnualReport       *AnnualReportSummary `json:"annual_report,omitempty"`
+}
+
+// AnnualReportSummary captures the key insights extracted from a BRF årsredovisning.
+type AnnualReportSummary struct {
+	Summary              string `json:"summary"`
+	FeePerMonth          string `json:"fee_per_month"`
+	DebtPerSqm           string `json:"debt_per_sqm"`
+	TotalDebt            string `json:"total_debt"`
+	Liquidity            string `json:"liquidity"`
+	PlannedMaintenance   string `json:"planned_maintenance"`
+	NotableRisks         string `json:"notable_risks"`
+	EnergyClass          string `json:"energy_class"`
+	EnergyConsumption    string `json:"energy_consumption"`
+	BoardComments        string `json:"board_comments"`
+	OrgNumber            string `json:"org_number"`
+	PropertyDesignation  string `json:"property_designation"`
+	BuildYear            string `json:"build_year"`
+	BoaTotal             string `json:"boa_total"`
+	LoaTotal             string `json:"loa_total"`
+	DebtCreditTotal      string `json:"debt_credit_total"`
+	CashAndBank          string `json:"cash_and_bank"`
+	NetResult            string `json:"net_result"`
+	InterestCosts        string `json:"interest_costs"`
+	Depreciation         string `json:"depreciation"`
+	FeeIncome            string `json:"fee_income"`
+	RentalIncome         string `json:"rental_income"`
+	LandStatus           string `json:"land_status"`
+	LandLeaseExpiry      string `json:"land_lease_expiry"`
+	RenovationsDone      string `json:"renovations_done"`
+	RenovationsPlanned   string `json:"renovations_planned"`
+	SourcePageCount      int    `json:"source_pages"`
+	CharactersAnalysed   int    `json:"characters_analysed"`
+	ExtractionModel      string `json:"extraction_model"`
+	ExtractionConfidence string `json:"extraction_confidence,omitempty"`
+	FileName             string `json:"file_name,omitempty"`
+	InputKind            string `json:"input_kind,omitempty"` // pdf-upload | text-client
 }
 
 // AreaInfo contains surrounding neighborhood data.

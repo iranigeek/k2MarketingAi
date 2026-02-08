@@ -854,6 +854,8 @@ body.sidebar-open .sidebar {
 .annual-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
 .annual-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: white; }
 .annual-card strong { display: block; margin-bottom: 4px; }
+.annual-save { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.annual-save .muted { margin: 0; }
 
 @media (max-width: 1400px) {
     .workspace {
