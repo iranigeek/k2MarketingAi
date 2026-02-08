@@ -1403,11 +1403,12 @@ body.is-landing .sidebar { display: none !important; }
     background: #07090f;
     color: #d6dbe4;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     gap: 12px;
     flex-wrap: wrap;
     padding: 16px clamp(18px, 5.2vw, 64px);
     font-size: 16px;
+    text-align: center;
 }
 .marketing-footer__bottom p {
     margin: 0;
@@ -1735,6 +1736,67 @@ body.about-page {
     white-space: nowrap;
 }
 
+/* Legal page */
+body.legal-page {
+    font-family: 'Nunito Sans', system-ui, -apple-system, sans-serif;
+    background: #ffffff;
+}
+.legal-page .hero {
+    background: #ffffff;
+    padding-bottom: 24px;
+}
+.legal-intro {
+    padding: 8px clamp(18px, 5.5vw, 64px) 28px;
+    background: #ffffff;
+}
+.legal-content {
+    padding: 0 clamp(18px, 5.5vw, 64px) 72px;
+    background: #f7f5f2;
+}
+.legal-block {
+    max-width: 900px;
+    margin: 0 auto;
+}
+.legal-updated {
+    margin: 10px 0 0;
+    color: #5b6472;
+    font-size: 14px;
+}
+.legal-surface {
+    border: 1px solid #e3ddd5;
+    border-radius: 16px;
+    background: #ffffff;
+    padding: clamp(18px, 3vw, 36px);
+}
+.legal-surface h2 {
+    margin: 28px 0 10px;
+    font-family: 'Lora', Georgia, serif;
+    color: #111827;
+    font-size: clamp(24px, 2.5vw, 30px);
+}
+.legal-surface h2:first-child {
+    margin-top: 0;
+}
+.legal-surface p {
+    margin: 0 0 12px;
+    color: #4a5563;
+    line-height: 1.75;
+    font-size: 17px;
+}
+.legal-surface ul {
+    margin: 0 0 14px;
+    padding-left: 20px;
+    color: #4a5563;
+}
+.legal-surface li {
+    margin-bottom: 8px;
+    line-height: 1.65;
+}
+.legal-surface a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 @media (max-width: 1024px) {
     .about-dentio-hero__inner,
     .about-story-grid {
@@ -1757,5 +1819,15 @@ body.about-page {
     }
     .about-value-grid {
         grid-template-columns: 1fr;
+    }
+    .legal-intro {
+        padding-top: 0;
+    }
+    .legal-content {
+        padding-bottom: 48px;
+    }
+    .legal-surface p,
+    .legal-surface li {
+        font-size: 16px;
     }
 }
