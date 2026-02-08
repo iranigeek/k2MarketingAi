@@ -957,7 +957,7 @@ type AnnualReportSummary = storage.AnnualReportSummary
 
 const maxAnnualBytes = 15 * 1024 * 1024 // 15 MB
 const maxAnnualPages = 40
-const maxAnnualOCRPages = 4
+const maxAnnualOCRPages = 2
 const maxAnnualChars = 20000
 
 // ExtractAnnualReport handles POST /api/annual-reports/extract.
@@ -1251,6 +1251,15 @@ func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int
 		if !hasAnnualFinanceSignals(out) {
 			logAnnualEvent("text found but missing finance signals; trying OCR fallback")
 			log.Printf("annual: text found but missing finance signals; trying OCR fallback")
+			if alt, err := pdfToText(ctx, data, minInt(readPages, maxAnnualOCRPages)); err == nil && strings.TrimSpace(alt) != "" {
+				clean := sanitizeWhitespace(alt)
+				if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
+					logAnnualEvent("pdftotext ok: chars=%d head=%q", len(clean), firstN(clean, 200))
+					log.Printf("annual: pdftotext ok: chars=%d", len(clean))
+					return clean, readPages, nil
+				}
+				log.Printf("annual: pdftotext too short or missing signals (chars=%d), falling back to OCR", len(clean))
+			}
 			ocrText, ocrErr := ocrPDFText(ctx, data, minInt(readPages, maxAnnualOCRPages))
 			if ocrErr == nil && strings.TrimSpace(ocrText) != "" {
 				logAnnualEvent("ocr fallback ok: chars=%d head=%q", len(ocrText), firstN(ocrText, 200))
@@ -1267,6 +1276,15 @@ func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int
 
 	logAnnualEvent("no text extracted; trying OCR")
 	log.Printf("annual: no text extracted; trying OCR")
+	if alt, err := pdfToText(ctx, data, minInt(readPages, maxAnnualOCRPages)); err == nil && strings.TrimSpace(alt) != "" {
+		clean := sanitizeWhitespace(alt)
+		if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
+			logAnnualEvent("pdftotext ok: chars=%d head=%q", len(clean), firstN(clean, 200))
+			log.Printf("annual: pdftotext ok: chars=%d", len(clean))
+			return clean, readPages, nil
+		}
+		log.Printf("annual: pdftotext too short or missing signals (chars=%d), falling back to OCR", len(clean))
+	}
 	ocrText, ocrErr := ocrPDFText(ctx, data, minInt(readPages, maxAnnualOCRPages))
 	if ocrErr != nil || strings.TrimSpace(ocrText) == "" {
 		if ocrErr != nil {
@@ -1340,13 +1358,13 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 	}
 
 	if _, err := exec.LookPath("pdftoppm"); err == nil {
-		ocrCtx, cancel := context.WithTimeout(ctx, 12*time.Minute)
+		ocrCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
 		defer cancel()
-		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR (pages=%d, dpi=72)", maxPages)
+		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR (pages=%d, dpi=50)", maxPages)
 		prefix := filepath.Join(dir, "page")
-		args := []string{"-r", "72", "-png", pdfPath, prefix}
+		args := []string{"-r", "50", "-png", pdfPath, prefix}
 		if maxPages > 0 {
-			args = []string{"-r", "72", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
+			args = []string{"-r", "50", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
 		}
 		if out, err := exec.CommandContext(ocrCtx, "pdftoppm", args...).CombinedOutput(); err != nil {
 			return "", fmt.Errorf("pdftoppm fel: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -1408,6 +1426,37 @@ func ocrmypdfSidecarText(ctx context.Context, pdfPath, lang string) (string, err
 		return "", fmt.Errorf("ocrmypdf sidecar saknas: %w", err)
 	}
 	return string(data), nil
+}
+
+func pdfToText(ctx context.Context, data []byte, maxPages int) (string, error) {
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		return "", fmt.Errorf("pdftotext saknas")
+	}
+	dir, err := os.MkdirTemp("", "annual-pdftotext-*")
+	if err != nil {
+		return "", fmt.Errorf("kunde inte skapa temp-katalog: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	pdfPath := filepath.Join(dir, "input.pdf")
+	if err := os.WriteFile(pdfPath, data, 0o600); err != nil {
+		return "", fmt.Errorf("kunde inte skriva temp-pdf: %w", err)
+	}
+	outPath := filepath.Join(dir, "out.txt")
+	args := []string{"-layout"}
+	if maxPages > 0 {
+		args = append(args, "-f", "1", "-l", strconv.Itoa(maxPages))
+	}
+	args = append(args, pdfPath, outPath)
+	cmd := exec.CommandContext(ctx, "pdftotext", args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("pdftotext fel: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	b, err := os.ReadFile(outPath)
+	if err != nil {
+		return "", fmt.Errorf("pdftotext saknar output: %w", err)
+	}
+	return string(b), nil
 }
 
 func listTesseractLangs(ctx context.Context) ([]string, error) {
