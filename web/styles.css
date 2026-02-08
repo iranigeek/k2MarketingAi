@@ -1736,17 +1736,33 @@ body.about-page {
     border-radius: 18px;
     border: 1px solid #e7e4df;
     background: linear-gradient(150deg, #f5f3ee 0%, #f8f7f4 55%, #f2f0eb 100%);
-    min-height: 390px;
+    width: 100%;
+    max-width: 520px;
+    min-height: 340px;
+    margin: 0 auto;
     position: relative;
     overflow: hidden;
     display: grid;
     place-items: center;
 }
-.about-photo-glow {
+.about-photo-shell::after {
+    content: '';
     position: absolute;
-    inset: auto -80px -130px -80px;
-    height: 230px;
-    background: radial-gradient(circle at 50% 10%, rgba(32, 41, 59, 0.18), transparent 64%);
+    inset: 0;
+    background: linear-gradient(180deg, rgba(9, 16, 29, 0.58), rgba(9, 16, 29, 0.76));
+    z-index: 1;
+    pointer-events: none;
+}
+.about-photo-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    filter: blur(0.6px);
+    transform: scale(1.008);
+    z-index: 0;
 }
 .about-photo-card {
     position: relative;
