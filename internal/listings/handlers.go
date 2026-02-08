@@ -957,7 +957,7 @@ type AnnualReportSummary = storage.AnnualReportSummary
 
 const maxAnnualBytes = 15 * 1024 * 1024 // 15 MB
 const maxAnnualPages = 40
-const maxAnnualOCRPages = 6
+const maxAnnualOCRPages = 4
 const maxAnnualChars = 20000
 
 // ExtractAnnualReport handles POST /api/annual-reports/extract.
@@ -1317,34 +1317,36 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 		return "", fmt.Errorf("kunde inte skriva temp-pdf: %w", err)
 	}
 
-	if _, err := exec.LookPath("ocrmypdf"); err == nil {
-		ocrCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-		defer cancel()
-		log.Printf("annual: ocrmypdf detected, attempting searchable conversion")
-		text, err := ocrmypdfSidecarText(ocrCtx, pdfPath, lang)
-		if err == nil && strings.TrimSpace(text) != "" {
-			clean := sanitizeWhitespace(text)
-			if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
-				log.Printf("annual: ocrmypdf ok, chars=%d", len(text))
-				return clean, nil
+	if os.Getenv("OCR_USE_OCRMY") == "1" {
+		if _, err := exec.LookPath("ocrmypdf"); err == nil {
+			ocrCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+			defer cancel()
+			log.Printf("annual: ocrmypdf detected, attempting searchable conversion")
+			text, err := ocrmypdfSidecarText(ocrCtx, pdfPath, lang)
+			if err == nil && strings.TrimSpace(text) != "" {
+				clean := sanitizeWhitespace(text)
+				if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
+					log.Printf("annual: ocrmypdf ok, chars=%d", len(text))
+					return clean, nil
+				}
+				log.Printf("annual: ocrmypdf text too short or missing signals (chars=%d), falling back to image OCR", len(clean))
 			}
-			log.Printf("annual: ocrmypdf text too short or missing signals (chars=%d), falling back to image OCR", len(clean))
-		}
-		if err != nil {
-			log.Printf("annual: ocrmypdf failed: %v", err)
-		} else {
-			log.Printf("annual: ocrmypdf returned empty text")
+			if err != nil {
+				log.Printf("annual: ocrmypdf failed: %v", err)
+			} else {
+				log.Printf("annual: ocrmypdf returned empty text")
+			}
 		}
 	}
 
 	if _, err := exec.LookPath("pdftoppm"); err == nil {
-		ocrCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
+		ocrCtx, cancel := context.WithTimeout(ctx, 12*time.Minute)
 		defer cancel()
-		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR (pages=%d, dpi=100)", maxPages)
+		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR (pages=%d, dpi=72)", maxPages)
 		prefix := filepath.Join(dir, "page")
-		args := []string{"-r", "100", "-png", pdfPath, prefix}
+		args := []string{"-r", "72", "-png", pdfPath, prefix}
 		if maxPages > 0 {
-			args = []string{"-r", "100", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
+			args = []string{"-r", "72", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
 		}
 		if out, err := exec.CommandContext(ocrCtx, "pdftoppm", args...).CombinedOutput(); err != nil {
 			return "", fmt.Errorf("pdftoppm fel: %w (%s)", err, strings.TrimSpace(string(out)))
