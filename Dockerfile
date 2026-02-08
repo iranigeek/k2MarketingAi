@@ -10,7 +10,6 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app ./cmd/api
 
 FROM debian:bookworm-slim
-<<<<<<< Updated upstream
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -20,22 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ocrmypdf \
   && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r app && useradd -r -g app app
-=======
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-swe \
-    ocrmypdf \
-  && rm -rf /var/lib/apt/lists/*
-
->>>>>>> Stashed changes
 WORKDIR /app
 COPY --from=builder /src/app /app/app
 COPY --from=builder /src/web /app/web
 
 EXPOSE 8080
 CMD ["/app/app"]
-

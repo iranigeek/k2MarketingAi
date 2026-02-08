@@ -33,10 +33,7 @@ services:
       # Mounta configen in i containern
       - ./secrets/config.json:/app/config.json:ro
     environment:
-      # Om din app stödjer att peka ut config-fil via env/flag:
-      # CONFIG_PATH: /app/config.json
-      # annars låter vi den bara ligga på /app/config.json
-      # (vanligt att appen läser ./config.json eller /app/config.json)
+      OCR_USE_OCRMY: "0"
       TZ: Europe/Stockholm
 
   caddy:

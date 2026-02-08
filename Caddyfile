@@ -2,12 +2,24 @@
 localhost {
     tls internal
     encode gzip
-    reverse_proxy app:8080
+    reverse_proxy app:8080 {
+        transport http {
+            read_buffer 16384
+            response_header_timeout 10m
+            idle_timeout 10m
+        }
+    }
 }
 
 # Publikt via domän
 vemra.se, www.vemra.se {
     encode gzip
-    reverse_proxy app:8080
+    reverse_proxy app:8080 {
+        transport http {
+            read_buffer 16384
+            response_header_timeout 10m
+            idle_timeout 10m
+        }
+    }
 }
 
