@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vemra</title>
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="is-landing">
@@ -16,8 +19,8 @@
                 </div>
                 <nav class="hero__links">
                     <a href="#hero">Hem</a>
-                    <a href="#how">Så funkar det</a>
-                    <a href="#features">Funktioner</a>
+                    <a href="#product">Produkt</a>
+                    <a href="#workflow">Arbetsflöde</a>
                     <a href="/about.html">Om oss</a>
                     <a href="#security">Säkerhet</a>
                     <a href="#contact">Kontakt</a>
@@ -29,9 +32,9 @@
             </div>
             <div class="hero__grid">
                 <div class="hero__copy">
-                    <p class="pill">AI för mäklare</p>
-                    <h1>Skapa objektsbeskrivningar<br><span class="accent">på under 5 minuter.</span></h1>
-                    <p class="lead">Vemra läser fakta, bilder och årsredovisning och ger dig färdiga annonser i rätt ton, med 3 alternativ på sekunder.</p>
+                    <p class="pill">AI-studio för mäklare</p>
+                    <h1>Bygg proffsiga objektsbeskrivningar<br><span class="accent">på några minuter.</span></h1>
+                    <p class="lead">Vemra samlar fakta, bilder och årsredovisningar och levererar publiceringsklara annonser i rätt ton — med tre genomarbetade alternativ direkt.</p>
                     <div class="hero__buttons">
                         <button class="primary" data-auth-trigger="register" type="button">Kom igång gratis</button>
                         <button class="secondary" data-auth-trigger="login" type="button">Logga in</button>
@@ -39,7 +42,7 @@
                     <div class="hero__stats">
                         <div>
                             <strong>Under 5 min</strong>
-                            <p class="muted small">Från fakta till klar text</p>
+                            <p class="muted small">Från data till färdig annons</p>
                         </div>
                         <div>
                             <strong>3</strong>
@@ -51,95 +54,143 @@
                         </div>
                     </div>
                 </div>
+                <div class="hero__visual" aria-hidden="true">
+                    <div class="visual-card">
+                        <div class="visual-card__header">
+                            <span class="visual-pill">Annonsgenerator</span>
+                            <span class="visual-status">Redo att publicera</span>
+                        </div>
+                        <div class="visual-title">Storgatan 15, Vasastan</div>
+                        <p class="visual-body">Ljus 3:a med stora fönster, tidstypiska detaljer och balkong i söderläge. Nära parker, service och kommunikationer.</p>
+                        <div class="visual-tags">
+                            <span>82 kvm</span><span>3 rum</span><span>Balkong</span><span>BRF 1998</span>
+                        </div>
+                    </div>
+                    <div class="visual-metric">
+                        <p class="eyebrow">Tidssparande</p>
+                        <h3>+5h / vecka</h3>
+                        <p class="muted">Automatiska annonser och omskrivningar.</p>
+                    </div>
+                    <div class="visual-list">
+                        <div>
+                            <p class="eyebrow">Underlag</p>
+                            <p class="muted">PDF · Planritning · 12 bilder</p>
+                        </div>
+                        <button class="ghost">Se sammanfattning</button>
+                    </div>
+                </div>
             </div>
         </header>
 
-        <section class="trust">
-            <div class="trust__item">Byggd för mäklare</div>
-            <div class="trust__item">GDPR i EU</div>
-            <div class="trust__item">PDF & bildstöd</div>
-            <div class="trust__item">Team & stilprofiler</div>
+        <section class="logo-strip">
+            <div class="logo-strip__item">Byggd för mäklare</div>
+            <div class="logo-strip__item">GDPR i EU</div>
+            <div class="logo-strip__item">PDF & bildanalys</div>
+            <div class="logo-strip__item">Team & stilprofiler</div>
+            <div class="logo-strip__item">Klar på sekunder</div>
         </section>
 
-        <section class="features" id="features">
-            <h2>Det här gör Vemra</h2>
-            <p class="lead center">En arbetsyta som ersätter manuell text, bildhantering och BRF-letande.</p>
-            <div class="features__grid">
-                <article class="feature-card">
+        <section class="product" id="product">
+            <div class="section-head">
+                <p class="pill">En samlad arbetsyta</p>
+                <h2>Allt du behöver för proffsiga annonser.</h2>
+                <p class="lead">Skapa annonser, analysera bilder och lyft nyckeltal — utan att byta verktyg.</p>
+            </div>
+            <div class="product__grid">
+                <article class="product-card">
                     <h3>Annonsgenerator</h3>
-                    <p>Skriv in adress, välj ton och längd. Tre färdiga versioner direkt.</p>
+                    <p>Fakta in, tre färdiga versioner ut. Ton, längd och målgrupp styrs per objekt.</p>
+                    <div class="product-meta">Neutral · Säljande · Lyxig</div>
                 </article>
-                <article class="feature-card">
-                    <h3>Bild & stil</h3>
-                    <p>Ladda upp bilder, få rumstyp och stilförslag. Koppla renderingar.</p>
+                <article class="product-card">
+                    <h3>Bildstudio</h3>
+                    <p>Analys av rum, stil och detaljer. Koppla renderingar direkt till objektet.</p>
+                    <div class="product-meta">Stilförslag · Visuell sammanfattning</div>
                 </article>
-                <article class="feature-card">
+                <article class="product-card">
                     <h3>Årsredovisning</h3>
                     <p>Plocka avgift, skuldsättning och risker från PDF på sekunder.</p>
+                    <div class="product-meta">Nyckeltal · Risker · Åtgärder</div>
                 </article>
-                <article class="feature-card">
+                <article class="product-card">
                     <h3>Versioner & mallar</h3>
-                    <p>Spara kunders ton och återanvänd. Versioner sparas bredvid texten.</p>
+                    <p>Bygg kunders tonalitet och återanvänd i hela teamet.</p>
+                    <div class="product-meta">Teamläge · Stilprofiler</div>
                 </article>
             </div>
         </section>
 
-        <section class="how" id="how">
-            <h2>Så funkar det</h2>
-            <p class="lead center">Tre steg – inget att installera.</p>
-            <div class="how__grid">
-                <article class="how-card">
-                    <div class="how-icon">1</div>
-                    <h3>Ladda upp</h3>
-                    <p>Bilder, planritningar eller PDF. Allt hamnar i objektet.</p>
+        <section class="workflow" id="workflow">
+            <div class="section-head">
+                <h2>Så funkar det</h2>
+                <p class="lead">Tre steg, ett flöde. Du är klar på några minuter.</p>
+            </div>
+            <div class="workflow__grid">
+                <article class="workflow-step">
+                    <div class="step-number">01</div>
+                    <h3>Ladda upp underlag</h3>
+                    <p>Bilder, planritning och årsredovisning samlas i objektet.</p>
                 </article>
-                <article class="how-card">
-                    <div class="how-icon">2</div>
-                    <h3>Välj ton</h3>
-                    <p>Säljande, lyxig eller sparad stilprofil för kunden.</p>
+                <article class="workflow-step">
+                    <div class="step-number">02</div>
+                    <h3>Välj ton och längd</h3>
+                    <p>Styr stil och fokus. Anpassa efter kund och målgrupp.</p>
                 </article>
-                <article class="how-card">
-                    <div class="how-icon">3</div>
-                    <h3>Publicera</h3>
-                    <p>Kopiera, ladda ner TXT eller koppla bilder och nyckeltal.</p>
+                <article class="workflow-step">
+                    <div class="step-number">03</div>
+                    <h3>Publicera direkt</h3>
+                    <p>Kopiera, exportera eller dela med teamet utan extra handpåläggning.</p>
                 </article>
             </div>
         </section>
 
         <section class="benefits" id="benefits">
-            <h2>Hur Vemra f&ouml;renklar f&ouml;r m&auml;klare</h2>
-            <p class="lead center">Mindre administration, mer tid f&ouml;r kunder och aff&auml;rer.</p>
+            <div class="section-head">
+                <h2>Resultat som märks direkt</h2>
+                <p class="lead">Mindre administration, mer tid för kundrelationer och affärer.</p>
+            </div>
             <div class="benefits__grid">
                 <article class="benefit-card">
-                    <h3>Automatiska annonser</h3>
-                    <p>Mata in adress och grunddata &ndash; f&aring; tre skr&auml;ddarsydda texter p&aring; sekunder.</p>
+                    <h3>Konsekvent kvalitet</h3>
+                    <p>Samlad tonalitet och mallar gör att hela teamet levererar samma nivå.</p>
                 </article>
                 <article class="benefit-card">
-                    <h3>Allt underlag p&aring; ett st&auml;lle</h3>
-                    <p>Bilder, planritningar och &aring;rsredovisningar laddas upp till samma objekt.</p>
+                    <h3>Snabbare publicering</h3>
+                    <p>Färdig annons med nyckeltal och bildinsikter — utan extra manuellt arbete.</p>
                 </article>
                 <article class="benefit-card">
-                    <h3>Kvalitet och ton</h3>
-                    <p>Spara kunders tonalitet och mallar s&aring; att alla texter matchar varum&auml;rket.</p>
-                </article>
-                <article class="benefit-card">
-                    <h3>Snabb publicering</h3>
-                    <p>Exportera, kopiera eller dela direkt till n&auml;sta steg utan manuell bearbetning.</p>
+                    <h3>Tryggt arbetsflöde</h3>
+                    <p>Åtkomstkontroll, loggning och EU-hantering av data.</p>
                 </article>
             </div>
         </section>
 
         <section class="security" id="security">
-            <h2>Säkerhet & integritet</h2>
-            <p class="lead center">Data behandlas inom EU med åtkomstkontroller och loggning.</p>
-            <div class="trust__item center" style="margin:0 auto; max-width: 520px;">Behörighetsstyrning • Krypterad överföring • GDPR-anpassat</div>
+            <div class="section-head">
+                <h2>Säkerhet & integritet</h2>
+                <p class="lead">Byggd för mäklarbolag som behöver kontroll, spårbarhet och trygg datalagring.</p>
+            </div>
+            <div class="security__grid">
+                <article class="security-card">
+                    <h3>GDPR i EU</h3>
+                    <p>Data behandlas och lagras inom EU enligt gällande regelverk.</p>
+                </article>
+                <article class="security-card">
+                    <h3>Åtkomstkontroll</h3>
+                    <p>Roller, behörigheter och loggning över allt som skapas.</p>
+                </article>
+                <article class="security-card">
+                    <h3>Krypterad överföring</h3>
+                    <p>All trafik skyddas med modern kryptering.</p>
+                </article>
+            </div>
         </section>
 
         <section class="cta" id="cta">
             <div>
                 <p class="pill">Baksidan av Vemra</p>
-                <h2>Logga in för att öppna ditt arbetsbord.</h2>
-                <p class="lead">Skapa konto gratis eller logga in direkt om du redan är kund.</p>
+                <h2>Redo att lyfta nästa annons?</h2>
+                <p class="lead">Skapa konto gratis eller logga in om du redan är kund.</p>
             </div>
             <div class="landing-buttons">
                 <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
@@ -714,4 +765,3 @@
     <script src="/app.js"></script>
 </body>
 </html>
-
