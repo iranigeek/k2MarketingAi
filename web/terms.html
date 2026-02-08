@@ -17,17 +17,23 @@
                 <div class="landing-brand">
                     <img src="/assets/vemra-logo.svg" alt="Vemra">
                 </div>
-                <nav class="hero__links">
-                    <a href="/">Hem</a>
-                    <a href="/#product">Produkt</a>
-                    <a href="/#workflow">Arbetsfl&ouml;de</a>
-                    <a href="/about.html">Om oss</a>
-                    <a href="/#security">S&auml;kerhet</a>
-                    <a href="#contact">Kontakt</a>
-                </nav>
-                <div class="landing-actions">
-                    <a class="ghost" href="/?auth=login">Logga in</a>
-                    <a class="primary" href="/?auth=register">Skapa konto</a>
+                <button id="hero-menu-toggle" class="hero__menu-toggle" type="button" aria-label="Öppna meny" aria-controls="hero-mobile-menu" aria-expanded="false">
+                    <span class="hero__menu-icon" aria-hidden="true"></span>
+                    <span class="hero__menu-label">Meny</span>
+                </button>
+                <div id="hero-mobile-menu" class="hero__menu">
+                    <nav class="hero__links">
+                        <a href="/">Hem</a>
+                        <a href="/#product">Produkt</a>
+                        <a href="/#workflow">Arbetsfl&ouml;de</a>
+                        <a href="/about.html">Om oss</a>
+                        <a href="/#security">S&auml;kerhet</a>
+                        <a href="#contact">Kontakt</a>
+                    </nav>
+                    <div class="landing-actions">
+                        <a class="ghost" href="/?auth=login">Logga in</a>
+                        <a class="primary" href="/?auth=register">Skapa konto</a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -190,6 +196,41 @@
             </footer>
         </main>
     </div>
+    <script>
+        (() => {
+            const nav = document.querySelector('.hero__nav');
+            const toggle = document.getElementById('hero-menu-toggle');
+            const menu = document.getElementById('hero-mobile-menu');
+            if (!nav || !toggle || !menu) return;
+
+            const closeMenu = () => {
+                nav.classList.remove('is-open');
+                toggle.setAttribute('aria-expanded', 'false');
+            };
+
+            toggle.addEventListener('click', event => {
+                event.stopPropagation();
+                const isOpen = nav.classList.toggle('is-open');
+                toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            });
+
+            menu.querySelectorAll('a').forEach(item => {
+                item.addEventListener('click', closeMenu);
+            });
+
+            document.addEventListener('click', event => {
+                if (!nav.contains(event.target)) closeMenu();
+            });
+
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') closeMenu();
+            });
+
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 980) closeMenu();
+            });
+        })();
+    </script>
 </body>
 </html>
 

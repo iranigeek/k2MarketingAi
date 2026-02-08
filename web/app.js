@@ -138,6 +138,40 @@ function maybeOpenAuthFromQuery() {
     setAuthMode(mode);
     showAuthOverlay(authCopyForMode(mode));
 }
+
+function initLandingMobileMenu() {
+    const nav = document.querySelector('.hero__nav');
+    const toggle = document.getElementById('hero-menu-toggle');
+    const menu = document.getElementById('hero-mobile-menu');
+    if (!nav || !toggle || !menu) return;
+
+    const closeMenu = () => {
+        nav.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+    };
+
+    toggle.addEventListener('click', event => {
+        event.stopPropagation();
+        const isOpen = nav.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    menu.querySelectorAll('a, button[data-auth-trigger]').forEach(item => {
+        item.addEventListener('click', closeMenu);
+    });
+
+    document.addEventListener('click', event => {
+        if (!nav.contains(event.target)) {
+            closeMenu();
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 980) {
+            closeMenu();
+        }
+    });
+}
 function showAuthError(text) {
     const el = document.getElementById('auth-error');
     if (!el) return;
@@ -1308,6 +1342,7 @@ function bindEvents() {
             }
         }
     });
+    initLandingMobileMenu();
     setupAuthOverlayDismiss();
     initSidebarState();
 }

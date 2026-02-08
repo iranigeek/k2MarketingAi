@@ -17,17 +17,23 @@
                 <div class="landing-brand">
                     <img src="/assets/vemra-logo.svg" alt="Vemra">
                 </div>
-                <nav class="hero__links">
-                    <a href="#hero">Hem</a>
-                    <a href="#product">Produkt</a>
-                    <a href="#workflow">Arbetsflöde</a>
-                    <a href="/about.html">Om oss</a>
-                    <a href="#security">Säkerhet</a>
-                    <a href="#contact">Kontakt</a>
-                </nav>
-                <div class="landing-actions">
-                    <button class="ghost" data-auth-trigger="login" type="button">Logga in</button>
-                    <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
+                <button id="hero-menu-toggle" class="hero__menu-toggle" type="button" aria-label="Öppna meny" aria-controls="hero-mobile-menu" aria-expanded="false">
+                    <span class="hero__menu-icon" aria-hidden="true"></span>
+                    <span class="hero__menu-label">Meny</span>
+                </button>
+                <div id="hero-mobile-menu" class="hero__menu">
+                    <nav class="hero__links">
+                        <a href="#hero">Hem</a>
+                        <a href="#product">Produkt</a>
+                        <a href="#workflow">Arbetsflöde</a>
+                        <a href="/about.html">Om oss</a>
+                        <a href="#security">Säkerhet</a>
+                        <a href="#contact">Kontakt</a>
+                    </nav>
+                    <div class="landing-actions">
+                        <button class="ghost" data-auth-trigger="login" type="button">Logga in</button>
+                        <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
+                    </div>
                 </div>
             </div>
             <div class="hero__grid">
