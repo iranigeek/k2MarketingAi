@@ -1241,6 +1241,62 @@ body.is-landing .sidebar { display: none !important; }
     text-decoration: underline;
     text-underline-offset: 2px;
 }
+.marketing-footer {
+    margin-top: 12px;
+}
+.marketing-footer__top {
+    background: #ececec;
+    border-top: 1px solid #dedede;
+    padding: 52px clamp(18px, 5.2vw, 64px);
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr;
+    gap: 36px;
+}
+.marketing-footer__brand {
+    padding-right: 36px;
+    border-right: 1px solid #d5d8dd;
+}
+.marketing-footer__brand h3 {
+    margin: 0 0 14px;
+    color: #111827;
+    font-size: 30px;
+    font-family: 'Lora', Georgia, serif;
+}
+.marketing-footer__brand p {
+    margin: 0 0 12px;
+    color: #4b5565;
+    line-height: 1.55;
+    font-size: 18px;
+    max-width: 48ch;
+}
+.marketing-footer__links h4 {
+    margin: 6px 0 16px;
+    color: #1f2937;
+    font-size: 27px;
+    font-family: 'Lora', Georgia, serif;
+}
+.marketing-footer__links a {
+    display: block;
+    color: #4b5565;
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+.marketing-footer__links a:hover {
+    color: #111827;
+}
+.marketing-footer__bottom {
+    background: #07090f;
+    color: #d6dbe4;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px clamp(18px, 5.2vw, 64px);
+    font-size: 16px;
+}
+.marketing-footer__bottom p {
+    margin: 0;
+}
 .landing .primary {
     background: #111827;
     color: #ffffff;
@@ -1279,6 +1335,16 @@ body.is-landing .sidebar { display: none !important; }
     .hero-stack-highlight {
         font-size: 31px;
     }
+    .marketing-footer__top {
+        grid-template-columns: 1fr 1fr;
+    }
+    .marketing-footer__brand {
+        grid-column: 1 / -1;
+        border-right: none;
+        border-bottom: 1px solid #d5d8dd;
+        padding-right: 0;
+        padding-bottom: 16px;
+    }
 }
 
 @media (max-width: 820px) {
@@ -1316,6 +1382,23 @@ body.is-landing .sidebar { display: none !important; }
     }
     .hero-stack-button {
         width: 100%;
+    }
+    .marketing-footer__top {
+        grid-template-columns: 1fr;
+        gap: 22px;
+        padding-top: 34px;
+        padding-bottom: 34px;
+    }
+    .marketing-footer__brand h3,
+    .marketing-footer__links h4 {
+        font-size: 25px;
+    }
+    .marketing-footer__brand p,
+    .marketing-footer__links a {
+        font-size: 16px;
+    }
+    .marketing-footer__bottom {
+        font-size: 14px;
     }
 }
 
