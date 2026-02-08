@@ -957,7 +957,7 @@ type AnnualReportSummary = storage.AnnualReportSummary
 
 const maxAnnualBytes = 15 * 1024 * 1024 // 15 MB
 const maxAnnualPages = 40
-const maxAnnualOCRPages = 25
+const maxAnnualOCRPages = 6
 const maxAnnualChars = 20000
 
 // ExtractAnnualReport handles POST /api/annual-reports/extract.
@@ -1317,10 +1317,9 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 		return "", fmt.Errorf("kunde inte skriva temp-pdf: %w", err)
 	}
 
-	ocrCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-
 	if _, err := exec.LookPath("ocrmypdf"); err == nil {
+		ocrCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer cancel()
 		log.Printf("annual: ocrmypdf detected, attempting searchable conversion")
 		text, err := ocrmypdfSidecarText(ocrCtx, pdfPath, lang)
 		if err == nil && strings.TrimSpace(text) != "" {
@@ -1339,11 +1338,13 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 	}
 
 	if _, err := exec.LookPath("pdftoppm"); err == nil {
-		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR")
+		ocrCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
+		defer cancel()
+		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR (pages=%d, dpi=100)", maxPages)
 		prefix := filepath.Join(dir, "page")
-		args := []string{"-r", "150", "-png", pdfPath, prefix}
+		args := []string{"-r", "100", "-png", pdfPath, prefix}
 		if maxPages > 0 {
-			args = []string{"-r", "150", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
+			args = []string{"-r", "100", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
 		}
 		if out, err := exec.CommandContext(ocrCtx, "pdftoppm", args...).CombinedOutput(); err != nil {
 			return "", fmt.Errorf("pdftoppm fel: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -1392,7 +1393,7 @@ func ocrmypdfSidecarText(ctx context.Context, pdfPath, lang string) (string, err
 		"-l", lang,
 		"--force-ocr",
 		"--jobs", "1",
-		"--tesseract-timeout", "300",
+		"--tesseract-timeout", "180",
 		"--sidecar", sidecar,
 		pdfPath, outPDF,
 	}
