@@ -1782,7 +1782,7 @@ async function uploadMediaFile(file, timeoutMs = 30000) {
     }
 }
 
-async function extractAnnualReport(file, timeoutMs = 180000) {
+async function extractAnnualReport(file, timeoutMs = 360000) {
     if (!file) return;
     state.annualReport.status = 'Analyserar årsredovisningen...';
     renderAnnualResult();

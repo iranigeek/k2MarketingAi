@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultReadTimeout  = 30 * time.Second
-	defaultWriteTimeout = 4 * time.Minute
+	defaultWriteTimeout = 8 * time.Minute
 )
 
 // New constructs the HTTP server with routes and middleware.

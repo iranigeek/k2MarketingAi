@@ -368,6 +368,13 @@ func addThousandsSep(s string) string {
 	return b.String()
 }
 
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Create handles POST /api/listings.
 func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -950,6 +957,7 @@ type AnnualReportSummary = storage.AnnualReportSummary
 
 const maxAnnualBytes = 15 * 1024 * 1024 // 15 MB
 const maxAnnualPages = 40
+const maxAnnualOCRPages = 25
 const maxAnnualChars = 20000
 
 // ExtractAnnualReport handles POST /api/annual-reports/extract.
@@ -1243,7 +1251,7 @@ func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int
 		if !hasAnnualFinanceSignals(out) {
 			logAnnualEvent("text found but missing finance signals; trying OCR fallback")
 			log.Printf("annual: text found but missing finance signals; trying OCR fallback")
-			ocrText, ocrErr := ocrPDFText(ctx, data, readPages)
+			ocrText, ocrErr := ocrPDFText(ctx, data, minInt(readPages, maxAnnualOCRPages))
 			if ocrErr == nil && strings.TrimSpace(ocrText) != "" {
 				logAnnualEvent("ocr fallback ok: chars=%d head=%q", len(ocrText), firstN(ocrText, 200))
 				log.Printf("annual: ocr fallback ok: chars=%d", len(ocrText))
@@ -1259,7 +1267,7 @@ func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int
 
 	logAnnualEvent("no text extracted; trying OCR")
 	log.Printf("annual: no text extracted; trying OCR")
-	ocrText, ocrErr := ocrPDFText(ctx, data, readPages)
+	ocrText, ocrErr := ocrPDFText(ctx, data, minInt(readPages, maxAnnualOCRPages))
 	if ocrErr != nil || strings.TrimSpace(ocrText) == "" {
 		if ocrErr != nil {
 			return "", readPages, fmt.Errorf("ingen extraherbar text i PDF:en (lästa sidor: %d). OCR misslyckades: %v", readPages, ocrErr)
@@ -1309,7 +1317,7 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 		return "", fmt.Errorf("kunde inte skriva temp-pdf: %w", err)
 	}
 
-	ocrCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
+	ocrCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	if _, err := exec.LookPath("ocrmypdf"); err == nil {
@@ -1333,9 +1341,9 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 	if _, err := exec.LookPath("pdftoppm"); err == nil {
 		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR")
 		prefix := filepath.Join(dir, "page")
-		args := []string{"-r", "200", "-png", pdfPath, prefix}
+		args := []string{"-r", "150", "-png", pdfPath, prefix}
 		if maxPages > 0 {
-			args = []string{"-r", "200", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
+			args = []string{"-r", "150", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
 		}
 		if out, err := exec.CommandContext(ocrCtx, "pdftoppm", args...).CombinedOutput(); err != nil {
 			return "", fmt.Errorf("pdftoppm fel: %w (%s)", err, strings.TrimSpace(string(out)))
