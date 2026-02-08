@@ -1088,6 +1088,10 @@ body.is-landing .sidebar { display: none !important; }
     padding: 0 16px;
     font-weight: 700;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
 }
 
 .trust,
@@ -1132,7 +1136,7 @@ body.is-landing .sidebar { display: none !important; }
 .how h2,
 .benefits h2,
 .security h2 {
-    font-size: clamp(34px, 4.1vw, 50px);
+    font-size: 35px;
 }
 .features .lead.center,
 .how .lead.center,
@@ -1141,8 +1145,6 @@ body.is-landing .sidebar { display: none !important; }
 .contact .center {
     color: #5b6472;
     font-size: 18px;
-    max-width: 64ch;
-    margin-left: auto;
     margin-right: auto;
 }
 .features__grid,
@@ -1167,19 +1169,25 @@ body.is-landing .sidebar { display: none !important; }
     background: #ffffff;
 }
 .feature-card {
-    text-align: left;
-    padding: 16px 16px 16px 12px;
+    text-align: center;
+    padding: 16px;
+}
+.benefit-card {
+    text-align: center;
+    padding: 16px;
 }
 .feature-card h3,
-.feature-card p {
-    text-align: left;
+.feature-card p,
+.benefit-card h3,
+.benefit-card p {
+    text-align: center;
 }
 .feature-card h3,
 .how-card h3,
 .benefit-card h3 {
     margin: 0 0 6px;
     color: #111827;
-    font-size: 19px;
+    font-size: 17px;
 }
 .feature-card p,
 .how-card p,
@@ -1187,6 +1195,7 @@ body.is-landing .sidebar { display: none !important; }
     margin: 0;
     color: #5b6472;
     line-height: 1.7;
+    text-align: center;
 }
 .how {
     text-align: center;
