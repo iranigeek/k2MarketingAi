@@ -1316,8 +1316,12 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 		log.Printf("annual: ocrmypdf detected, attempting searchable conversion")
 		text, err := ocrmypdfSidecarText(ocrCtx, pdfPath, lang)
 		if err == nil && strings.TrimSpace(text) != "" {
-			log.Printf("annual: ocrmypdf ok, chars=%d", len(text))
-			return sanitizeWhitespace(text), nil
+			clean := sanitizeWhitespace(text)
+			if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
+				log.Printf("annual: ocrmypdf ok, chars=%d", len(text))
+				return clean, nil
+			}
+			log.Printf("annual: ocrmypdf text too short or missing signals (chars=%d), falling back to image OCR", len(clean))
 		}
 		if err != nil {
 			log.Printf("annual: ocrmypdf failed: %v", err)
@@ -1378,7 +1382,7 @@ func ocrmypdfSidecarText(ctx context.Context, pdfPath, lang string) (string, err
 	sidecar := filepath.Join(dir, "ocr.txt")
 	args := []string{
 		"-l", lang,
-		"--skip-text",
+		"--force-ocr",
 		"--sidecar", sidecar,
 		pdfPath, outPDF,
 	}
