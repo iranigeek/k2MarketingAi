@@ -10,9 +10,17 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o k2api ./cmd/api
 
-FROM alpine:3.20
+FROM debian:bookworm-slim
 
-RUN addgroup -S app && adduser -S app -G app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-swe \
+    ocrmypdf \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r app && useradd -r -g app app
 WORKDIR /app
 
 COPY --from=builder /src/k2api /app/k2api
