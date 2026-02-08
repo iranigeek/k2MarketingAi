@@ -1309,7 +1309,7 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 		return "", fmt.Errorf("kunde inte skriva temp-pdf: %w", err)
 	}
 
-	ocrCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ocrCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
 
 	if _, err := exec.LookPath("ocrmypdf"); err == nil {
@@ -1333,9 +1333,9 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 	if _, err := exec.LookPath("pdftoppm"); err == nil {
 		log.Printf("annual: pdftoppm detected, rasterizing pages for OCR")
 		prefix := filepath.Join(dir, "page")
-		args := []string{"-r", "300", "-png", pdfPath, prefix}
+		args := []string{"-r", "200", "-png", pdfPath, prefix}
 		if maxPages > 0 {
-			args = []string{"-r", "300", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
+			args = []string{"-r", "200", "-f", "1", "-l", strconv.Itoa(maxPages), "-png", pdfPath, prefix}
 		}
 		if out, err := exec.CommandContext(ocrCtx, "pdftoppm", args...).CombinedOutput(); err != nil {
 			return "", fmt.Errorf("pdftoppm fel: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -1383,6 +1383,8 @@ func ocrmypdfSidecarText(ctx context.Context, pdfPath, lang string) (string, err
 	args := []string{
 		"-l", lang,
 		"--force-ocr",
+		"--jobs", "1",
+		"--tesseract-timeout", "300",
 		"--sidecar", sidecar,
 		pdfPath, outPDF,
 	}
