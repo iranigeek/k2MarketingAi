@@ -114,6 +114,28 @@ function setAuthMode(mode) {
     clearAuthError();
 }
 
+
+function authCopyForMode(mode) {
+    return mode === 'register'
+        ? 'Skapa konto och ga direkt till baksidan.'
+        : 'Logga in for att oppna baksidan.';
+}
+
+function maybeOpenAuthFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = (params.get('auth') || '').toLowerCase();
+    const mode = raw === 'register' ? 'register' : raw === 'login' ? 'login' : '';
+    if (!mode) return;
+
+    params.delete('auth');
+    const nextQuery = params.toString();
+    const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', nextURL);
+
+    if (state.user) return;
+    setAuthMode(mode);
+    showAuthOverlay(authCopyForMode(mode));
+}
 function showAuthError(text) {
     const el = document.getElementById('auth-error');
     if (!el) return;
@@ -1120,10 +1142,7 @@ function bindEvents() {
         btn.addEventListener('click', () => {
             const mode = btn.dataset.authTrigger === 'register' ? 'register' : 'login';
             setAuthMode(mode);
-            const copy = mode === 'register'
-                ? 'Skapa konto och gå direkt till baksidan.'
-                : 'Logga in för att öppna baksidan.';
-            showAuthOverlay(copy);
+            showAuthOverlay(authCopyForMode(mode));
         });
     });
 
@@ -2241,7 +2260,7 @@ bindEvents();
 renderVisionLab();
 renderAnnualResult();
 showView('objects');
-checkSession();
+checkSession().finally(maybeOpenAuthFromQuery);
 
 async function initApp() {
     if (!state.user) return;
@@ -2296,3 +2315,4 @@ async function openListingModal(id) {
 function closeModal() {
     document.getElementById('modal-overlay')?.classList.add('hidden');
 }
+

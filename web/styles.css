@@ -62,6 +62,7 @@ body.sidebar-open .sidebar {
     height: auto;
     display: block;
     transform: translateY(1px);
+    filter: grayscale(1) brightness(0.22) contrast(1.1);
 }
 .sidebar__footer {
     margin-top: auto;
@@ -945,7 +946,11 @@ body.is-landing .sidebar { display: none !important; }
     font-weight: 700;
 }
 .landing-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
-.landing-brand img { height: 40px; transform: translateY(1px); }
+.landing-brand img {
+    height: 40px;
+    transform: translateY(1px);
+    filter: grayscale(1) brightness(0.22) contrast(1.1);
+}
 .landing-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .hero__grid {
     display: grid;
@@ -956,12 +961,12 @@ body.is-landing .sidebar { display: none !important; }
 }
 .hero__copy h1 {
     font-family: 'Lora', Georgia, serif;
-    font-size: clamp(32px, 4.6vw, 54px);
+    font-size: clamp(40px, 4.6vw, 40px);
     line-height: 1.08;
     margin: 10px 0 14px;
     letter-spacing: -0.01em;
     color: #111827;
-    max-width: 16ch;
+    max-width: 20ch;
 }
 .hero__copy .lead {
     max-width: 62ch;
@@ -1002,6 +1007,7 @@ body.is-landing .sidebar { display: none !important; }
 .hero__visual {
     display: flex;
     justify-content: flex-end;
+    margin-top: 30px;
 }
 .hero-stack {
     width: 100%;
@@ -1340,7 +1346,7 @@ body.is-landing .sidebar { display: none !important; }
     border-radius: 0;
 }
 .cta h2 {
-    font-size: clamp(30px, 3.4vw, 44px);
+    font-size: clamp(40px, 4.6vw, 40px);
 }
 .cta .lead {
     margin: 0;
@@ -1575,9 +1581,9 @@ body.about-page {
 }
 .about-dentio-hero__copy h1 {
     margin: 0;
-    font-size: clamp(34px, 5vw, 56px);
+    font-size: clamp(40px, 4.6vw, 40px);
     line-height: 1.08;
-    max-width: 16ch;
+    max-width: 20ch;
 }
 .about-mission {
     margin-top: 24px;
