@@ -1,43 +1,64 @@
-version: "3.9"
-
 services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: k2db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d k2db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: k2marketingai-app:latest
+    build: .
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "${APP_PORT:-8080}:8080"
+    networks:
+      - internal
+      - web
+    expose:
+      - "8080"
     volumes:
-      - type: bind
-        source: ${CONFIG_PATH:-./config.json}
-        target: /app/config.json
-        read_only: true
-      - type: bind
-        source: ${SECRETS_DIR:-./secrets}
-        target: /secrets
-        read_only: true
+      # Mounta configen in i containern
+      - ./secrets/config.json:/app/config.json:ro
     environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/secrets/vertex-ai.json}
-    restart: unless-stopped
+      # Om din app stödjer att peka ut config-fil via env/flag:
+      # CONFIG_PATH: /app/config.json
+      # annars låter vi den bara ligga på /app/config.json
+      # (vanligt att appen läser ./config.json eller /app/config.json)
+      TZ: Europe/Stockholm
 
-  db:
-    image: postgres:16
-    environment:
-      - POSTGRES_USER=${DB_USER:-postgres}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
-      - POSTGRES_DB=${DB_NAME:-k2db}
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+  caddy:
+    image: caddy:2
     restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
 
 volumes:
-  pg-data:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    internal: true
+  web:
+

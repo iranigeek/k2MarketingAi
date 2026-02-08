@@ -1,0 +1,13 @@
+# Lokalt test på servern (funkar alltid)
+localhost {
+    tls internal
+    encode gzip
+    reverse_proxy app:8080
+}
+
+# Publikt via domän
+vemra.se, www.vemra.se {
+    encode gzip
+    reverse_proxy app:8080
+}
+

@@ -1,16 +1,16 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-bookworm AS builder
 
 WORKDIR /src
-
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 COPY go.mod go.sum ./
-ENV GOTOOLCHAIN=auto
 RUN go mod download
-
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o k2api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app ./cmd/api
 
 FROM debian:bookworm-slim
+<<<<<<< Updated upstream
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -21,12 +21,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r app && useradd -r -g app app
-WORKDIR /app
+=======
 
-COPY --from=builder /src/k2api /app/k2api
-COPY web /app/web
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-swe \
+    ocrmypdf \
+  && rm -rf /var/lib/apt/lists/*
+
+>>>>>>> Stashed changes
+WORKDIR /app
+COPY --from=builder /src/app /app/app
+COPY --from=builder /src/web /app/web
 
 EXPOSE 8080
-USER app
+CMD ["/app/app"]
 
-ENTRYPOINT ["/app/k2api"]
