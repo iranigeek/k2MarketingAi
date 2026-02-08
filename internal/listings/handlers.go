@@ -1251,6 +1251,15 @@ func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int
 		if !hasAnnualFinanceSignals(out) {
 			logAnnualEvent("text found but missing finance signals; trying OCR fallback")
 			log.Printf("annual: text found but missing finance signals; trying OCR fallback")
+			if alt, err := pdfToText(ctx, data, minInt(readPages, maxAnnualPages)); err == nil && strings.TrimSpace(alt) != "" {
+				clean := sanitizeWhitespace(alt)
+				if len(clean) >= 500 || len(clean) > len(out)*2 {
+					logAnnualEvent("pdftotext (full) ok: chars=%d head=%q", len(clean), firstN(clean, 200))
+					log.Printf("annual: pdftotext (full) ok: chars=%d", len(clean))
+					return clean, readPages, nil
+				}
+				log.Printf("annual: pdftotext (full) too short (chars=%d), falling back to OCR", len(clean))
+			}
 			if alt, err := pdfToText(ctx, data, minInt(readPages, maxAnnualOCRPages)); err == nil && strings.TrimSpace(alt) != "" {
 				clean := sanitizeWhitespace(alt)
 				if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
@@ -1276,6 +1285,15 @@ func extractPDFText(ctx context.Context, data []byte, maxPages int) (string, int
 
 	logAnnualEvent("no text extracted; trying OCR")
 	log.Printf("annual: no text extracted; trying OCR")
+	if alt, err := pdfToText(ctx, data, minInt(readPages, maxAnnualPages)); err == nil && strings.TrimSpace(alt) != "" {
+		clean := sanitizeWhitespace(alt)
+		if len(clean) >= 500 || len(clean) > len(out)*2 {
+			logAnnualEvent("pdftotext (full) ok: chars=%d head=%q", len(clean), firstN(clean, 200))
+			log.Printf("annual: pdftotext (full) ok: chars=%d", len(clean))
+			return clean, readPages, nil
+		}
+		log.Printf("annual: pdftotext (full) too short (chars=%d), falling back to OCR", len(clean))
+	}
 	if alt, err := pdfToText(ctx, data, minInt(readPages, maxAnnualOCRPages)); err == nil && strings.TrimSpace(alt) != "" {
 		clean := sanitizeWhitespace(alt)
 		if len(clean) >= 300 || hasAnnualFinanceSignals(clean) {
