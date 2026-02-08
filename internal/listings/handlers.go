@@ -1413,8 +1413,6 @@ func ocrPDFText(ctx context.Context, data []byte, maxPages int) (string, error) 
 	}
 
 	// Fallback: prova tesseract direkt på PDF (inte alltid stöds beroende på build)
-	ocrCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-	defer cancel()
 	cmd := exec.CommandContext(ocrCtx, "tesseract", pdfPath, "stdout", "-l", lang, "--dpi", "300")
 	out, err := cmd.Output()
 	if err != nil {
