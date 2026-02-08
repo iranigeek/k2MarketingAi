@@ -7,11 +7,11 @@
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="is-landing">
-    <div class="landing">
+    <div class="landing site-redesign">
         <header class="hero" id="hero">
             <div class="hero__nav">
                 <div class="landing-brand">
@@ -32,51 +32,58 @@
             </div>
             <div class="hero__grid">
                 <div class="hero__copy">
-                    <p class="pill">AI-studio för mäklare</p>
-                    <h1>Bygg proffsiga objektsbeskrivningar<br><span class="accent">på några minuter.</span></h1>
-                    <p class="lead">Vemra samlar fakta, bilder och årsredovisningar och levererar publiceringsklara annonser i rätt ton — med tre genomarbetade alternativ direkt.</p>
+                    <p class="pill">AI f&ouml;r m&auml;klare</p>
+                    <h1>Bygg annonser snabbare med en arbetsyta som t&auml;nker som en m&auml;klare.</h1>
+                    <p class="lead">Vemra samlar fakta, bilder och dokument i ett fl&ouml;de och genererar tydliga texter som g&aring;r att publicera direkt.</p>
                     <div class="hero__buttons">
-                        <button class="primary" data-auth-trigger="register" type="button">Kom igång gratis</button>
+                        <button class="primary" data-auth-trigger="register" type="button">Kom ig&aring;ng gratis</button>
                         <button class="secondary" data-auth-trigger="login" type="button">Logga in</button>
                     </div>
                     <div class="hero__stats">
                         <div>
                             <strong>Under 5 min</strong>
-                            <p class="muted small">Från data till färdig annons</p>
+                            <p class="muted small">Fr&aring;n underlag till klar annons</p>
                         </div>
                         <div>
-                            <strong>3</strong>
-                            <p class="muted small">Alternativ per generering</p>
+                            <strong>3 versioner</strong>
+                            <p class="muted small">Per generering</p>
                         </div>
                         <div>
-                            <strong>≈35 min</strong>
+                            <strong>&asymp;35 min</strong>
                             <p class="muted small">Sparad tid per objekt</p>
                         </div>
                     </div>
                 </div>
                 <div class="hero__visual" aria-hidden="true">
-                    <div class="visual-card">
-                        <div class="visual-card__header">
-                            <span class="visual-pill">Annonsgenerator</span>
-                            <span class="visual-status">Redo att publicera</span>
-                        </div>
-                        <div class="visual-title">Storgatan 15, Vasastan</div>
-                        <p class="visual-body">Ljus 3:a med stora fönster, tidstypiska detaljer och balkong i söderläge. Nära parker, service och kommunikationer.</p>
-                        <div class="visual-tags">
-                            <span>82 kvm</span><span>3 rum</span><span>Balkong</span><span>BRF 1998</span>
-                        </div>
-                    </div>
-                    <div class="visual-metric">
-                        <p class="eyebrow">Tidssparande</p>
-                        <h3>+5h / vecka</h3>
-                        <p class="muted">Automatiska annonser och omskrivningar.</p>
-                    </div>
-                    <div class="visual-list">
-                        <div>
-                            <p class="eyebrow">Underlag</p>
-                            <p class="muted">PDF · Planritning · 12 bilder</p>
-                        </div>
-                        <button class="ghost">Se sammanfattning</button>
+                    <div class="hero-stack">
+                        <article class="hero-stack-card hero-stack-card--main">
+                            <div class="hero-stack-top">
+                                <p class="hero-stack-label">Annonsgenerator</p>
+                                <span class="hero-stack-pill">Redo att publicera</span>
+                            </div>
+                            <h3>Storgatan 15, Vasastan</h3>
+                            <p class="hero-stack-copy">Ljus 3:a med stora f&ouml;nster, tidstypiska detaljer och balkong i s&ouml;derl&auml;ge.</p>
+                            <div class="hero-stack-tags">
+                                <span>82 kvm</span>
+                                <span>3 rum</span>
+                                <span>Balkong</span>
+                                <span>BRF 1998</span>
+                            </div>
+                        </article>
+
+                        <article class="hero-stack-card">
+                            <p class="hero-stack-label">Tidssparande</p>
+                            <p class="hero-stack-highlight">+5h / vecka</p>
+                            <p class="hero-stack-copy">Automatiska annonser och omskrivningar.</p>
+                        </article>
+
+                        <article class="hero-stack-card hero-stack-card--row">
+                            <div>
+                                <p class="hero-stack-label">Underlag</p>
+                                <p class="hero-stack-copy">PDF · Planritning · 12 bilder</p>
+                            </div>
+                            <a href="#features" class="hero-stack-button">Se sammanfattning</a>
+                        </article>
                     </div>
                 </div>
             </div>
@@ -188,9 +195,9 @@
 
         <section class="cta" id="cta">
             <div>
-                <p class="pill">Baksidan av Vemra</p>
-                <h2>Redo att lyfta nästa annons?</h2>
-                <p class="lead">Skapa konto gratis eller logga in om du redan är kund.</p>
+                <p class="pill">N&auml;sta steg</p>
+                <h2>Logga in för att öppna ditt arbetsbord.</h2>
+                <p class="lead">Skapa konto gratis eller logga in direkt om du redan är kund.</p>
             </div>
             <div class="landing-buttons">
                 <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
@@ -202,6 +209,37 @@
             <h2>Kontakt</h2>
             <p class="center muted">Har du frågor eller vill boka en demo? Mejla oss på <a href="mailto:hello@vemra.se">hello@vemra.se</a>.</p>
         </section>
+        <footer class="marketing-footer" id="footer">
+            <div class="marketing-footer__top">
+                <div class="marketing-footer__brand">
+                    <h3>Vemra</h3>
+                    <p>Vemras vision &auml;r att frig&ouml;ra tid f&ouml;r m&auml;klare med smart AI, s&aring; att team kan fokusera mer p&aring; kunder och aff&auml;rer.</p>
+                    <p>Organisationsnummer: 559431-5136</p>
+                    <p>Byggt i Sverige</p>
+                </div>
+
+                <div class="marketing-footer__links">
+                    <h4>Snabbl&auml;nkar</h4>
+                    <a href="#features">V&aring;ra l&ouml;sningar</a>
+                    <a href="#security">S&auml;kerhet</a>
+                    <a href="/about.html">Om oss</a>
+                    <a href="#contact">Kontakt</a>
+                </div>
+
+                <div class="marketing-footer__links">
+                    <h4>Juridiskt</h4>
+                    <a href="#security">Integritetspolicy</a>
+                    <a href="#security">Anv&auml;ndarvillkor</a>
+                    <a href="#security">PUB-avtal (DPA)</a>
+                    <a href="#security">Trust Center</a>
+                </div>
+            </div>
+
+            <div class="marketing-footer__bottom">
+                <p>&copy; 2026 Vemra. Alla r&auml;ttigheter f&ouml;rbeh&aring;llna.</p>
+                <p>GDPR | ISO 27001 (in progress) | CE</p>
+            </div>
+        </footer>
     </div>
 
     <div class="app-shell">
