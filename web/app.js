@@ -119,8 +119,8 @@ function setAuthMode(mode) {
 
 function authCopyForMode(mode) {
     return mode === 'register'
-        ? 'Skapa konto och ga direkt till baksidan.'
-        : 'Logga in for att oppna baksidan.';
+        ? 'Skapa konto eller logga in'
+        : 'Logga in';
 }
 
 function maybeOpenAuthFromQuery() {
