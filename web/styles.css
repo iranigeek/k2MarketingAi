@@ -1531,17 +1531,7 @@ body.about-page {
 }
 .about-page .hero {
     background: #ffffff;
-    border-bottom: none;
-    padding-bottom: 16px;
-}
-.about-page .hero__nav {
-    max-width: 1200px;
-}
-.about-page .hero__links {
-    color: #3f4650;
-}
-.about-page .hero__links a {
-    font-weight: 700;
+    padding-bottom: 28px;
 }
 .about-page .landing .primary {
     background: #1f2933;
@@ -1554,7 +1544,7 @@ body.about-page {
 }
 
 .about-dentio-hero {
-    padding: 16px clamp(18px, 5.5vw, 64px) 84px;
+    padding: 0 clamp(18px, 5.5vw, 64px) 84px;
     background: #ffffff;
 }
 .about-dentio-hero__inner,
@@ -1757,7 +1747,7 @@ body.about-page {
 
 @media (max-width: 680px) {
     .about-dentio-hero {
-        padding-top: 30px;
+        padding-top: 8px;
     }
     .about-photo-shell {
         min-height: 300px;
