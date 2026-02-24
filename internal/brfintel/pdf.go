@@ -275,7 +275,7 @@ Regler:
 			},
 		},
 		"generationConfig": map[string]any{
-			"temperature": 0.1,
+			"temperature":     0.1,
 			"maxOutputTokens": 8192,
 		},
 	}

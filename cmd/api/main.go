@@ -154,9 +154,9 @@ func main() {
 	brfAnalyzer := brfintel.NewAnalyzer(geminiClient, store)
 	brfAnalyzer.SetBRFStore(brfStore)
 	brfIntelHandler := brfintel.Handler{
-		Analyzer:  brfAnalyzer,
-		Store:     store,
-		BRFStore:  brfStore,
+		Analyzer: brfAnalyzer,
+		Store:    store,
+		BRFStore: brfStore,
 	}
 
 	staticFS := http.FileServer(http.Dir("web"))

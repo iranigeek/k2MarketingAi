@@ -43,15 +43,15 @@ func (a *Analyzer) SetBRFStore(s BRFReportStore) {
 func (a *Analyzer) Analyze(ctx context.Context, req AnalyzeRequest, ownerID string) (BRFReport, error) {
 	now := time.Now()
 	report := BRFReport{
-		ID:          fmt.Sprintf("brf_%d", now.UnixMilli()),
-		OwnerID:     ownerID,
-		BRFName:     req.BRFName,
-		OrgNumber:   req.OrgNumber,
+		ID:           fmt.Sprintf("brf_%d", now.UnixMilli()),
+		OwnerID:      ownerID,
+		BRFName:      req.BRFName,
+		OrgNumber:    req.OrgNumber,
 		Municipality: req.Municipality,
-		City:        req.City,
-		ListingID:   req.ListingID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		City:         req.City,
+		ListingID:    req.ListingID,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	// ── Step 1: Build financials from structured or raw input ──
