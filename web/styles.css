@@ -863,6 +863,103 @@ body.sidebar-open .sidebar {
 .annual-save select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(191, 150, 83, 0.2); }
 .link-status { font-size: 0.9rem; color: var(--muted); }
 
+/* ── BRF Intelligence Engine ── */
+.brfintel-panel { display: flex; flex-direction: column; gap: 20px; }
+.brfintel-upload { display: flex; flex-direction: column; gap: 12px; }
+.brfintel-form { display: flex; flex-direction: column; gap: 10px; }
+.brfintel-drop { cursor: pointer; text-align: center; border-style: dashed; background: #f9fbff; }
+.brfintel-drop:hover { border-color: var(--gold); background: #f7f0d9; }
+
+.brfintel-result { display: flex; flex-direction: column; gap: 16px; }
+
+.brfintel-score-hero {
+    display: flex; align-items: center; gap: 24px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white; border-radius: 16px; padding: 24px 32px;
+}
+.brfintel-score-circle {
+    width: 100px; height: 100px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 800; border: 4px solid rgba(255,255,255,0.2);
+}
+.brfintel-score-number { font-size: 2.2rem; line-height: 1; }
+.brfintel-score-max { font-size: 0.85rem; opacity: 0.6; }
+.brfintel-score-meta { display: flex; flex-direction: column; gap: 4px; }
+.brfintel-grade-badge {
+    display: inline-block; padding: 3px 12px; border-radius: 8px;
+    font-weight: 700; font-size: 1.1rem; width: fit-content;
+}
+.brfintel-score-label { font-size: 1.1rem; font-weight: 600; }
+.brfintel-grade-a .brfintel-score-circle, .brfintel-grade-a { border-color: #22c55e; }
+.brfintel-grade-a .brfintel-grade-badge { background: #22c55e; color: #fff; }
+.brfintel-grade-b .brfintel-score-circle, .brfintel-grade-b { border-color: #86efac; }
+.brfintel-grade-b .brfintel-grade-badge { background: #86efac; color: #064e3b; }
+.brfintel-grade-c .brfintel-score-circle, .brfintel-grade-c { border-color: #eab308; }
+.brfintel-grade-c .brfintel-grade-badge { background: #eab308; color: #422006; }
+.brfintel-grade-d .brfintel-score-circle, .brfintel-grade-d { border-color: #f97316; }
+.brfintel-grade-d .brfintel-grade-badge { background: #f97316; color: #fff; }
+.brfintel-grade-e .brfintel-score-circle, .brfintel-grade-e { border-color: #ef4444; }
+.brfintel-grade-e .brfintel-grade-badge { background: #ef4444; color: #fff; }
+.brfintel-grade-f .brfintel-score-circle, .brfintel-grade-f { border-color: #991b1b; }
+.brfintel-grade-f .brfintel-grade-badge { background: #991b1b; color: #fff; }
+
+.brfintel-dims { display: flex; flex-direction: column; gap: 10px; }
+.brfintel-dim { padding: 8px 0; }
+.brfintel-dim__header { display: flex; justify-content: space-between; font-size: 0.95rem; margin-bottom: 4px; }
+.brfintel-dim__score { font-weight: 700; }
+.brfintel-bar { height: 8px; background: #e5e7eb; border-radius: 8px; overflow: hidden; }
+.brfintel-bar__fill { height: 100%; border-radius: 8px; transition: width 0.6s ease; }
+
+.brfintel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.brfintel-card {
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; background: white;
+}
+.brfintel-card h4 { margin: 0 0 10px; font-size: 1rem; }
+.brfintel-card--full { grid-column: 1 / -1; }
+
+.brfintel-risk { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+.brfintel-risk:last-child { border-bottom: none; }
+.brfintel-risk__icon { font-size: 1.2rem; }
+.brfintel-risk__metric { font-size: 0.85rem; color: var(--muted); background: #f1f5f9; padding: 2px 8px; border-radius: 6px; }
+
+.brfintel-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.brfintel-table th, .brfintel-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+.brfintel-table th { font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+
+.brfintel-trend-list { margin: 8px 0 0 18px; padding: 0; font-size: 0.92rem; }
+.brfintel-trend-list li { margin-bottom: 4px; }
+
+.brfintel-prose p { margin: 0 0 10px; line-height: 1.6; font-size: 0.95rem; }
+
+.brfintel-sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+.brfintel-history { margin-top: 16px; }
+.brfintel-history h3 { margin: 0 0 10px; font-size: 1rem; }
+.brfintel-history-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border: 1px solid var(--border);
+    border-radius: 12px; margin-bottom: 8px; background: white;
+}
+.brfintel-history-score {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 0.95rem; color: white;
+    background: #64748b; flex-shrink: 0;
+}
+.brfintel-history-score.brfintel-grade-a { background: #22c55e; }
+.brfintel-history-score.brfintel-grade-b { background: #86efac; color: #064e3b; }
+.brfintel-history-score.brfintel-grade-c { background: #eab308; color: #422006; }
+.brfintel-history-score.brfintel-grade-d { background: #f97316; }
+.brfintel-history-score.brfintel-grade-e { background: #ef4444; }
+.brfintel-history-score.brfintel-grade-f { background: #991b1b; }
+.brfintel-history-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+
+@media (max-width: 600px) {
+    .brfintel-score-hero { flex-direction: column; text-align: center; padding: 18px; }
+    .brfintel-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1400px) {
     .workspace {
         grid-template-columns: 1fr;

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/oauth2/google"
 
 	"k2MarketingAi/internal/auth"
+	"k2MarketingAi/internal/brfintel"
 	"k2MarketingAi/internal/config"
 	"k2MarketingAi/internal/events"
 	"k2MarketingAi/internal/generation"
@@ -141,6 +142,23 @@ func main() {
 		LLM:         geminiClient,
 	}
 
+	// BRF Intelligence Engine
+	var brfStore brfintel.BRFReportStore
+	if pgStore, ok := store.(*storage.PostgresStore); ok {
+		brfStore = brfintel.NewPostgresBRFStore(pgStore.Pool())
+		log.Println("brf intel: PostgreSQL storage")
+	} else {
+		brfStore = brfintel.NewInMemoryBRFStore(store)
+		log.Println("brf intel: in-memory storage")
+	}
+	brfAnalyzer := brfintel.NewAnalyzer(geminiClient, store)
+	brfAnalyzer.SetBRFStore(brfStore)
+	brfIntelHandler := brfintel.Handler{
+		Analyzer:  brfAnalyzer,
+		Store:     store,
+		BRFStore:  brfStore,
+	}
+
 	staticFS := http.FileServer(http.Dir("web"))
 	visionHandler := vision.Handler{
 		Analyzer: visionAnalyzer,
@@ -148,7 +166,7 @@ func main() {
 		Renderer: visionRenderer,
 		Imagen:   imagenRenderer,
 	}
-	srv := server.New(cfg.Port, authHandler, authMiddleware, listingHandler, visionHandler, staticFS)
+	srv := server.New(cfg.Port, authHandler, authMiddleware, listingHandler, visionHandler, brfIntelHandler, staticFS)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

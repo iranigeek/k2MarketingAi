@@ -1263,6 +1263,26 @@ function bindEvents() {
         });
     }
 
+    // BRF Intel file upload listeners
+    const brfIntelInput = document.getElementById('brfintel-file');
+    const brfIntelDrop = document.getElementById('brfintel-drop');
+    if (brfIntelInput) {
+        brfIntelInput.addEventListener('change', async e => {
+            handleBRFIntelFileChange(e.target.files);
+            e.target.value = '';
+        });
+    }
+    if (brfIntelDrop) {
+        brfIntelDrop.addEventListener('click', () => brfIntelInput?.click());
+        brfIntelDrop.addEventListener('dragover', e => { e.preventDefault(); brfIntelDrop.classList.add('dragging'); });
+        brfIntelDrop.addEventListener('dragleave', () => brfIntelDrop.classList.remove('dragging'));
+        brfIntelDrop.addEventListener('drop', e => {
+            e.preventDefault();
+            brfIntelDrop.classList.remove('dragging');
+            handleBRFIntelFileChange(e.dataTransfer?.files);
+        });
+    }
+
     document.getElementById('clear-versions').addEventListener('click', () => {
         state.versions = [];
         renderVersions();
@@ -2169,6 +2189,283 @@ async function tryClientPdfExtraction(file) {
 }
 
 
+// ──────────────────────────────────────────────────────────────────────
+// BRF Intelligence Engine — Frontend
+// ──────────────────────────────────────────────────────────────────────
+
+const brfIntelState = {
+    status: '',
+    report: null,
+    history: [],
+    uploading: false,
+};
+
+function handleBRFIntelFileChange(fileList) {
+    const file = fileList?.[0];
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    if (!file.type.includes('pdf') && !name.endsWith('.pdf')) {
+        brfIntelState.status = 'Endast PDF-filer stöds.';
+        brfIntelState.report = null;
+        renderBRFIntelResult();
+        return;
+    }
+    uploadBRFIntelPDF(file);
+}
+
+async function uploadBRFIntelPDF(file) {
+    if (brfIntelState.uploading) return;
+    brfIntelState.uploading = true;
+    brfIntelState.status = 'Laddar upp och analyserar årsredovisningen... (kan ta 30–90 sekunder)';
+    brfIntelState.report = null;
+    renderBRFIntelResult();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('brf_name', document.getElementById('brfintel-name')?.value?.trim() || 'Okänd förening');
+    formData.append('city', document.getElementById('brfintel-city')?.value?.trim() || '');
+    formData.append('municipality', document.getElementById('brfintel-municipality')?.value?.trim() || '');
+
+    try {
+        const res = await fetch('/api/brf-intel/analyze-pdf', {
+            method: 'POST',
+            body: formData,
+        });
+        if (res.status === 401) {
+            handleUnauthorized('Sessionen gick ut. Logga in igen.');
+            return;
+        }
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || 'Analysen misslyckades');
+        }
+        const data = await res.json();
+        brfIntelState.report = data.report;
+        brfIntelState.status = 'Analys klar!';
+    } catch (err) {
+        brfIntelState.status = err.message || 'Ett fel uppstod vid analysen.';
+        brfIntelState.report = null;
+    } finally {
+        brfIntelState.uploading = false;
+        renderBRFIntelResult();
+        loadBRFIntelHistory();
+    }
+}
+
+function renderBRFIntelResult() {
+    const statusEl = document.getElementById('brfintel-status');
+    const resultEl = document.getElementById('brfintel-result');
+    if (!resultEl) return;
+    if (statusEl) statusEl.textContent = brfIntelState.status || '';
+
+    if (!brfIntelState.report) {
+        resultEl.innerHTML = '<p class="muted">Ingen BRF-analys genomförd ännu.</p>';
+        return;
+    }
+
+    const r = brfIntelState.report;
+    const score = r.score || {};
+    const dims = (score.dimensions || []).map(d =>
+        `<div class="brfintel-dim">
+            <div class="brfintel-dim__header">
+                <span>${d.name}</span>
+                <span class="brfintel-dim__score">${d.score}/100</span>
+            </div>
+            <div class="brfintel-bar">
+                <div class="brfintel-bar__fill" style="width:${d.score}%; background:${barColor(d.score)}"></div>
+            </div>
+            <p class="muted small">${d.description || ''}</p>
+        </div>`
+    ).join('');
+
+    const risks = (r.risks || []).map(risk => {
+        const icon = {critical:'🔴',high:'🟠',medium:'🟡',low:'🟢'}[risk.severity] || 'ℹ️';
+        return `<div class="brfintel-risk brfintel-risk--${risk.severity}">
+            <span class="brfintel-risk__icon">${icon}</span>
+            <div>
+                <strong>${risk.title}</strong>
+                <p class="muted small">${risk.description}</p>
+                ${risk.metric ? `<span class="brfintel-risk__metric">${risk.metric}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('') || '<p class="muted">Inga riskvarningar.</p>';
+
+    const trends = r.trends || {};
+    const trendDirection = {improving:'📈 Förbättras', declining:'📉 Försämras', stable:'📊 Stabil', insufficient_data:'📋 Otillräcklig data'}[trends.direction] || trends.direction || '';
+    const trendPoints = (trends.data_points || []).map(tp => {
+        const metrics = [];
+        if (tp.avgift_per_sqm) metrics.push(`Avgift/m²: ${Math.round(tp.avgift_per_sqm).toLocaleString('sv-SE')} kr`);
+        if (tp.skuld_per_sqm) metrics.push(`Skuld/m²: ${Math.round(tp.skuld_per_sqm).toLocaleString('sv-SE')} kr`);
+        if (tp.arsresultat) metrics.push(`Årsresultat: ${Math.round(tp.arsresultat).toLocaleString('sv-SE')} kr`);
+        if (tp.likviditet) metrics.push(`Likviditet: ${Math.round(tp.likviditet).toLocaleString('sv-SE')} kr`);
+        if (tp.reparationsfond) metrics.push(`Reparationsfond: ${Math.round(tp.reparationsfond).toLocaleString('sv-SE')} kr`);
+        if (tp.rantekostnad) metrics.push(`Räntekostnad: ${Math.round(tp.rantekostnad).toLocaleString('sv-SE')} kr`);
+        if (!metrics.length) return '';
+        return `<li><strong>${tp.year || '—'}:</strong> ${metrics.join(' · ')}</li>`;
+    }).filter(Boolean).join('');
+
+    const fin = r.financials || {};
+    const finRows = [
+        ['Skuld/m²', fin.debt_per_sqm ? `${Math.round(fin.debt_per_sqm).toLocaleString('sv-SE')} kr` : '—'],
+        ['Avgift/m²/år', fin.avgift_per_sqm ? `${Math.round(fin.avgift_per_sqm).toLocaleString('sv-SE')} kr` : '—'],
+        ['Avgift/mån', fin.fee_per_month ? `${Math.round(fin.fee_per_month).toLocaleString('sv-SE')} kr` : '—'],
+        ['Totala skulder', fin.total_debt ? `${Math.round(fin.total_debt).toLocaleString('sv-SE')} kr` : '—'],
+        ['Kassa & bank', fin.cash_and_bank ? `${Math.round(fin.cash_and_bank).toLocaleString('sv-SE')} kr` : '—'],
+        ['Reparationsfond', fin.repair_fund ? `${Math.round(fin.repair_fund).toLocaleString('sv-SE')} kr` : '—'],
+        ['Räntekostnader', fin.interest_costs ? `${Math.round(fin.interest_costs).toLocaleString('sv-SE')} kr` : '—'],
+        ['Årsresultat', fin.net_result ? `${Math.round(fin.net_result).toLocaleString('sv-SE')} kr` : '—'],
+        ['Byggår', fin.build_year || '—'],
+        ['Markstatus', fin.land_status || '—'],
+        ['Energiklass', fin.energy_class || '—'],
+    ].filter(([,v]) => v !== '—');
+
+    const comparison = r.comparison;
+    let comparisonHtml = '';
+    if (comparison && comparison.metrics && comparison.metrics.length > 0) {
+        const compRows = comparison.metrics.map(m =>
+            `<tr>
+                <td>${m.name}</td>
+                <td>${Math.round(m.this_brf).toLocaleString('sv-SE')} ${m.unit}</td>
+                <td>${Math.round(m.peer_median).toLocaleString('sv-SE')} ${m.unit}</td>
+                <td>${m.better ? '✅' : '⚠️'}</td>
+            </tr>`
+        ).join('');
+        comparisonHtml = `
+            <div class="brfintel-card">
+                <h4>📊 Jämförelse med liknande föreningar</h4>
+                <p class="muted small">${comparison.peer_count || 0} jämförbara föreningar i ${comparison.peer_group || 'samma område'}</p>
+                <table class="brfintel-table">
+                    <thead><tr><th>Nyckeltal</th><th>Denna BRF</th><th>Median</th><th></th></tr></thead>
+                    <tbody>${compRows}</tbody>
+                </table>
+            </div>`;
+    }
+
+    const sourceDocs = (r.source_documents || []).map(d =>
+        `<span class="annual-badge">${d.file_name || 'PDF'} · ${d.page_count || '?'} sidor · ${d.char_count || '?'} tecken</span>`
+    ).join('');
+
+    resultEl.innerHTML = `
+        <div class="brfintel-score-hero">
+            <div class="brfintel-score-circle brfintel-grade-${(score.grade || 'C').toLowerCase()}">
+                <span class="brfintel-score-number">${score.total || 0}</span>
+                <span class="brfintel-score-max">/100</span>
+            </div>
+            <div class="brfintel-score-meta">
+                <span class="brfintel-grade-badge">${score.grade || '—'}</span>
+                <span class="brfintel-score-label">${score.label || ''}</span>
+                <span class="muted">${r.brf_name || ''} ${r.org_number ? '(' + r.org_number + ')' : ''}</span>
+            </div>
+        </div>
+
+        <div class="brfintel-dims">${dims}</div>
+
+        <div class="brfintel-grid">
+            <div class="brfintel-card">
+                <h4>⚠️ Riskvarningar</h4>
+                ${risks}
+            </div>
+
+            <div class="brfintel-card">
+                <h4>📈 Ekonomisk trend</h4>
+                <p><strong>${trendDirection}</strong></p>
+                <p class="muted">${trends.summary || ''}</p>
+                ${trendPoints ? `<ul class="brfintel-trend-list">${trendPoints}</ul>` : ''}
+            </div>
+
+            <div class="brfintel-card">
+                <h4>🔑 Nyckeltal</h4>
+                <table class="brfintel-table">
+                    <tbody>
+                        ${finRows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            ${comparisonHtml}
+        </div>
+
+        ${r.buyer_summary ? `
+        <div class="brfintel-card brfintel-card--full">
+            <h4>🏠 Köparsammanfattning</h4>
+            <div class="brfintel-prose">${formatProse(r.buyer_summary)}</div>
+        </div>` : ''}
+
+        ${r.legal_view ? `
+        <div class="brfintel-card brfintel-card--full">
+            <h4>⚖️ Juridisk säkerhetsvy (mäklare)</h4>
+            <div class="brfintel-prose">${formatProse(r.legal_view)}</div>
+        </div>` : ''}
+
+        ${sourceDocs ? `<div class="brfintel-sources">${sourceDocs}</div>` : ''}
+    `;
+}
+
+function barColor(score) {
+    if (score >= 75) return '#22c55e';
+    if (score >= 50) return '#eab308';
+    if (score >= 30) return '#f97316';
+    return '#ef4444';
+}
+
+function formatProse(text) {
+    if (!text) return '';
+    return text.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+async function loadBRFIntelHistory() {
+    const listEl = document.getElementById('brfintel-history-list');
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/brf-intel/recent');
+        if (!res.ok) return;
+        const data = await res.json();
+        brfIntelState.history = Array.isArray(data) ? data : [];
+    } catch {
+        brfIntelState.history = [];
+    }
+    renderBRFIntelHistory();
+}
+
+function renderBRFIntelHistory() {
+    const listEl = document.getElementById('brfintel-history-list');
+    if (!listEl) return;
+    if (!brfIntelState.history.length) {
+        listEl.innerHTML = '<p class="muted">Inga tidigare analyser.</p>';
+        return;
+    }
+    listEl.innerHTML = brfIntelState.history.map(r => `
+        <div class="brfintel-history-item" data-report-id="${r.id}">
+            <div class="brfintel-history-score brfintel-grade-${(r.grade || 'c').toLowerCase()}">${r.score}</div>
+            <div class="brfintel-history-meta">
+                <strong>${r.brf_name}</strong>
+                <span class="muted small">${new Date(r.created_at).toLocaleDateString('sv-SE')} · ${r.risk_count} varningar</span>
+            </div>
+            <button class="ghost small" onclick="loadBRFIntelReport('${r.id}')">Visa</button>
+        </div>
+    `).join('');
+}
+
+async function loadBRFIntelReport(id) {
+    brfIntelState.status = 'Laddar rapport...';
+    renderBRFIntelResult();
+    try {
+        const res = await fetch(`/api/brf-intel/reports/${id}`);
+        if (res.status === 401) {
+            handleUnauthorized('Sessionen gick ut. Logga in igen.');
+            return;
+        }
+        if (!res.ok) throw new Error('Kunde inte hämta rapporten.');
+        const report = await res.json();
+        brfIntelState.report = report;
+        brfIntelState.status = '';
+    } catch (err) {
+        brfIntelState.status = err.message || 'Ett fel uppstod.';
+    }
+    renderBRFIntelResult();
+}
+
+
 function renderUploads() {
     const list = document.getElementById('upload-list');
     if (!list) return;
@@ -2302,6 +2599,9 @@ function showView(view) {
     if (view === 'vision') {
         renderVisionLab();
     }
+    if (view === 'brfintel') {
+        loadBRFIntelHistory();
+    }
     if (window.innerWidth < 900) {
         closeSidebar();
     }
@@ -2330,6 +2630,10 @@ function updateTopbarCopy(view) {
         annuals: {
             title: 'Extrahera årsredovisningar',
             subtitle: 'Plocka ut nyckeltal ur BRF-PDF.',
+        },
+        brfintel: {
+            title: 'BRF Analys',
+            subtitle: 'Djupanalys med poäng, risker och trender.',
         },
         images: {
             title: 'Bildhantering',

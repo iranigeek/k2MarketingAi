@@ -172,6 +172,90 @@ func (c *GeminiClient) ChatCompletion(ctx context.Context, messages []ChatMessag
 	return strings.Join(parts, "\n\n"), nil
 }
 
+// RawRequest sends an arbitrary JSON payload to the Gemini generateContent
+// endpoint and returns the first candidate text. This enables multimodal
+// requests (e.g. inline PDF/image data) that ChatCompletion cannot express.
+func (c *GeminiClient) RawRequest(ctx context.Context, payload map[string]any) (string, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal gemini payload: %w", err)
+	}
+
+	model := c.model
+	if override := modelFromContext(ctx); override != "" {
+		model = override
+	}
+
+	endpoint := fmt.Sprintf(
+		"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent",
+		url.PathEscape(model),
+	)
+	if c.tokenSource == nil {
+		if strings.TrimSpace(c.apiKey) == "" {
+			return "", fmt.Errorf("gemini: missing API key or service account credentials")
+		}
+		endpoint = fmt.Sprintf("%s?key=%s", endpoint, url.QueryEscape(c.apiKey))
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("gemini request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	if c.tokenSource != nil {
+		token, err := c.tokenSource.Token()
+		if err != nil {
+			return "", fmt.Errorf("gemini: fetch oauth token: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("gemini perform request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		var failure struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&failure)
+		return "", fmt.Errorf("gemini status %d: %s", resp.StatusCode, failure.Error.Message)
+	}
+
+	var completion struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&completion); err != nil {
+		return "", fmt.Errorf("gemini decode response: %w", err)
+	}
+
+	if len(completion.Candidates) == 0 || len(completion.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("gemini returned no candidates")
+	}
+
+	var parts []string
+	for _, part := range completion.Candidates[0].Content.Parts {
+		if trimmed := strings.TrimSpace(part.Text); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	if len(parts) == 0 {
+		return "", fmt.Errorf("gemini candidate missing text")
+	}
+	return strings.Join(parts, "\n\n"), nil
+}
+
 func normalizeModel(model string) string {
 	clean := strings.TrimSpace(model)
 	clean = strings.TrimPrefix(clean, "models/")

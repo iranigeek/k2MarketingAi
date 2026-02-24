@@ -416,5 +416,29 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("alter users approved: %w", err)
 	}
 
+	// BRF Intelligence reports table
+	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS brf_reports (
+		id TEXT PRIMARY KEY,
+		owner_id TEXT NOT NULL,
+		brf_name TEXT NOT NULL DEFAULT '',
+		org_number TEXT NOT NULL DEFAULT '',
+		municipality TEXT NOT NULL DEFAULT '',
+		city TEXT NOT NULL DEFAULT '',
+		listing_id TEXT NOT NULL DEFAULT '',
+		score JSONB DEFAULT '{}'::jsonb,
+		risks JSONB DEFAULT '[]'::jsonb,
+		trends JSONB DEFAULT '{}'::jsonb,
+		buyer_summary TEXT NOT NULL DEFAULT '',
+		legal_view TEXT NOT NULL DEFAULT '',
+		financials JSONB DEFAULT '{}'::jsonb,
+		comparison JSONB,
+		source_years INT[] DEFAULT '{}',
+		source_documents JSONB DEFAULT '[]'::jsonb,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`); err != nil {
+		return fmt.Errorf("create brf_reports table: %w", err)
+	}
+
 	return nil
 }

@@ -20,6 +20,11 @@ type PostgresStore struct {
 	pool *pgxpool.Pool
 }
 
+// Pool returns the underlying pgx connection pool for use by extension stores.
+func (s *PostgresStore) Pool() *pgxpool.Pool {
+	return s.pool
+}
+
 const listingColumns = "id, owner_id, address, tone, target_audience, highlights, image_url, fee, living_area, rooms, sections, full_copy, section_history, pipeline_status, details, insights, created_at"
 
 // CreateListing stores the provided listing in PostgreSQL.
