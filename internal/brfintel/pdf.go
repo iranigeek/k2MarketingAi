@@ -28,7 +28,7 @@ import (
 const (
 	maxPDFBytes = 20 * 1024 * 1024 // 20 MB
 	maxPDFPages = 50
-	maxPDFChars = 25000
+	maxPDFChars = 60000
 )
 
 // AnalyzePDF handles POST /api/brf-intel/analyze-pdf.
@@ -244,20 +244,23 @@ func geminiPDFOCR(ctx context.Context, llmClient llm.Client, pdfData []byte) (st
 	// Build multimodal request with inline PDF
 	encoded := base64.StdEncoding.EncodeToString(pdfData)
 
-	prompt := `Du är en OCR-specialist. Extrahera ALL text från detta PDF-dokument.
+	prompt := `Du är en OCR-specialist för svenska bostadsrättsföreningars årsredovisningar.
+Extrahera ALL text från detta PDF-dokument. Prioritera denna ordning:
+
+1. RESULTATRÄKNING (alla poster, exakta belopp)
+2. BALANSRÄKNING (tillgångar, skulder, eget kapital — alla poster)
+3. NOTER (specifikationer av skulder, räntor, avskrivningar)
+4. FÖRVALTNINGSBERÄTTELSE (nyckeltal, underhållsplan, fastighetsinfo, byggår, tomträtt)
+5. KASSAFLÖDESANALYS (om den finns)
+6. Övrig text (styrelsens underskrifter, revisionsberättelse etc.)
 
 Regler:
-- Behåll ALLA siffror exakt som de står
-- Behåll tabeller i läsbar form (en rad per rad, kolumner separerade med tab eller mellanslag)
-- Behåll rubriker och styckeindelning
-- Inkludera alla sidor
-- Svara ENBART med den extraherade texten, ingen kommentar eller inledning
-- Om dokumentet är en årsredovisning, var extra noga med att extrahera:
-  * Resultaträkning / resultatrapport
-  * Balansräkning  
-  * Nyckeltal
-  * Förvaltningsberättelse
-  * Skulder och tillgångar`
+- Återge ALLA siffror exakt som de står i dokumentet — utelämna INGENTING
+- Tabeller: en rad per rad, kolumner separerade med tab
+- Behåll rubriker, styckeindelning och sidnumrering
+- Inkludera ALLA sidor (detta dokument kan vara 20-50 sidor)
+- Svara ENBART med den extraherade texten, ingen inledning eller kommentar
+- Om belopp anges i tkr eller Mkr, skriv ut det`
 
 	payload := map[string]any{
 		"contents": []map[string]any{
@@ -276,7 +279,7 @@ Regler:
 		},
 		"generationConfig": map[string]any{
 			"temperature":     0.1,
-			"maxOutputTokens": 8192,
+			"maxOutputTokens": 65536,
 		},
 	}
 
