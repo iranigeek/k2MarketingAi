@@ -311,16 +311,34 @@ func (s *PostgresStore) CreateUser(ctx context.Context, user User) (User, error)
 	return user, nil
 }
 
+const userColumns = "id, email, password_hash, approved, stripe_customer_id, subscription_id, subscription_status, plan_id, usage_count, created_at"
+
 // GetUserByEmail fetches a user by their email address.
 func (s *PostgresStore) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, approved, created_at FROM users WHERE email=$1`, strings.ToLower(strings.TrimSpace(email)))
+	row := s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE email=$1`, strings.ToLower(strings.TrimSpace(email)))
 	return scanUser(row)
 }
 
 // GetUserByID fetches a user by ID.
 func (s *PostgresStore) GetUserByID(ctx context.Context, id string) (User, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, email, password_hash, approved, created_at FROM users WHERE id=$1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id=$1`, id)
 	return scanUser(row)
+}
+
+// GetUserByStripeCustomer fetches a user by their Stripe customer ID.
+func (s *PostgresStore) GetUserByStripeCustomer(ctx context.Context, stripeCustomerID string) (User, error) {
+	row := s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE stripe_customer_id=$1`, stripeCustomerID)
+	return scanUser(row)
+}
+
+// UpdateUserStripe updates stripe-related fields on a user.
+func (s *PostgresStore) UpdateUserStripe(ctx context.Context, userID, stripeCustomerID, subscriptionID, subscriptionStatus, planID string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET stripe_customer_id=$2, subscription_id=$3, subscription_status=$4, plan_id=$5 WHERE id=$1`,
+		userID, stripeCustomerID, subscriptionID, subscriptionStatus, planID)
+	if err != nil {
+		return fmt.Errorf("update user stripe: %w", err)
+	}
+	return nil
 }
 
 // ApproveUser updates the approval flag for a user.
@@ -332,9 +350,28 @@ func (s *PostgresStore) ApproveUser(ctx context.Context, id string, approved boo
 	return nil
 }
 
+// IncrementUsage atomically increments the usage counter and returns the new value.
+func (s *PostgresStore) IncrementUsage(ctx context.Context, userID string) (int, error) {
+	var newCount int
+	err := s.pool.QueryRow(ctx, `UPDATE users SET usage_count = usage_count + 1 WHERE id=$1 RETURNING usage_count`, userID).Scan(&newCount)
+	if err != nil {
+		return 0, fmt.Errorf("increment usage: %w", err)
+	}
+	return newCount, nil
+}
+
+// ResetUsage sets the usage counter back to zero.
+func (s *PostgresStore) ResetUsage(ctx context.Context, userID string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET usage_count = 0 WHERE id=$1`, userID)
+	if err != nil {
+		return fmt.Errorf("reset usage: %w", err)
+	}
+	return nil
+}
+
 // ListUsers returns all users.
 func (s *PostgresStore) ListUsers(ctx context.Context) ([]User, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, email, password_hash, approved, created_at FROM users ORDER BY created_at DESC`)
+	rows, err := s.pool.Query(ctx, `SELECT `+userColumns+` FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -451,12 +488,30 @@ func scanStyleProfile(row rowScanner) (StyleProfile, error) {
 }
 
 func scanUser(row rowScanner) (User, error) {
-	var user User
-	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Approved, &user.CreatedAt); err != nil {
+	var (
+		user             User
+		stripeCustomerID sql.NullString
+		subscriptionID   sql.NullString
+		subStatus        sql.NullString
+		planID           sql.NullString
+	)
+	if err := row.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Approved, &stripeCustomerID, &subscriptionID, &subStatus, &planID, &user.UsageCount, &user.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return User{}, ErrNotFound
 		}
 		return User{}, fmt.Errorf("scan user: %w", err)
+	}
+	if stripeCustomerID.Valid {
+		user.StripeCustomerID = stripeCustomerID.String
+	}
+	if subscriptionID.Valid {
+		user.SubscriptionID = subscriptionID.String
+	}
+	if subStatus.Valid {
+		user.SubscriptionStatus = subStatus.String
+	}
+	if planID.Valid {
+		user.PlanID = planID.String
 	}
 	return user, nil
 }

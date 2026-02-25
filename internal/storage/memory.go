@@ -313,3 +313,57 @@ func (s *InMemoryStore) DeleteUser(_ context.Context, id string) error {
 	delete(s.users, id)
 	return nil
 }
+
+// UpdateUserStripe updates stripe-related fields on a user in memory.
+func (s *InMemoryStore) UpdateUserStripe(_ context.Context, userID, stripeCustomerID, subscriptionID, subscriptionStatus, planID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	user, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	user.StripeCustomerID = stripeCustomerID
+	user.SubscriptionID = subscriptionID
+	user.SubscriptionStatus = subscriptionStatus
+	user.PlanID = planID
+	s.users[userID] = user
+	return nil
+}
+
+// GetUserByStripeCustomer fetches a user by Stripe customer ID in memory.
+func (s *InMemoryStore) GetUserByStripeCustomer(_ context.Context, stripeCustomerID string) (User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.StripeCustomerID == stripeCustomerID {
+			return u, nil
+		}
+	}
+	return User{}, ErrNotFound
+}
+
+// IncrementUsage atomically increments the usage counter in memory.
+func (s *InMemoryStore) IncrementUsage(_ context.Context, userID string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	user, ok := s.users[userID]
+	if !ok {
+		return 0, ErrNotFound
+	}
+	user.UsageCount++
+	s.users[userID] = user
+	return user.UsageCount, nil
+}
+
+// ResetUsage sets the usage counter back to zero in memory.
+func (s *InMemoryStore) ResetUsage(_ context.Context, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	user, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	user.UsageCount = 0
+	s.users[userID] = user
+	return nil
+}

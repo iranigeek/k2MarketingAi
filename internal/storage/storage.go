@@ -263,11 +263,44 @@ type StyleProfile struct {
 
 // User represents an authenticated account that owns listings.
 type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	Approved     bool      `json:"approved"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID                 string    `json:"id"`
+	Email              string    `json:"email"`
+	PasswordHash       string    `json:"-"`
+	Approved           bool      `json:"approved"`
+	StripeCustomerID   string    `json:"stripe_customer_id,omitempty"`
+	SubscriptionID     string    `json:"subscription_id,omitempty"`
+	SubscriptionStatus string    `json:"subscription_status,omitempty"`
+	PlanID             string    `json:"plan_id,omitempty"`
+	UsageCount         int       `json:"usage_count"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+// FreeUsageLimit is the maximum number of AI calls for non-paying users.
+const FreeUsageLimit = 10
+
+// HasActiveSubscription returns true when the user has a paying subscription.
+func (u User) HasActiveSubscription() bool {
+	return u.SubscriptionStatus == "active" || u.SubscriptionStatus == "trialing"
+}
+
+// CanUseAI returns true when the user still has quota (paid or free tier).
+func (u User) CanUseAI() bool {
+	if u.HasActiveSubscription() {
+		return true
+	}
+	return u.UsageCount < FreeUsageLimit
+}
+
+// RemainingFreeUses returns how many free calls are left.
+func (u User) RemainingFreeUses() int {
+	if u.HasActiveSubscription() {
+		return -1 // unlimited
+	}
+	remaining := FreeUsageLimit - u.UsageCount
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
 }
 
 // Store defines the persistence behaviors the application relies on.
@@ -291,6 +324,10 @@ type Store interface {
 	ApproveUser(ctx context.Context, id string, approved bool) error
 	ListUsers(ctx context.Context) ([]User, error)
 	DeleteUser(ctx context.Context, id string) error
+	UpdateUserStripe(ctx context.Context, userID, stripeCustomerID, subscriptionID, subscriptionStatus, planID string) error
+	GetUserByStripeCustomer(ctx context.Context, stripeCustomerID string) (User, error)
+	IncrementUsage(ctx context.Context, userID string) (int, error)
+	ResetUsage(ctx context.Context, userID string) error
 	Close()
 }
 
@@ -414,6 +451,19 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	if _, err := pool.Exec(ctx, `ALTER TABLE users ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false`); err != nil {
 		return fmt.Errorf("alter users approved: %w", err)
+	}
+	// Stripe subscription columns
+	stripeAlters := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_id TEXT`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_id TEXT DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0`,
+	}
+	for _, stmt := range stripeAlters {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("alter users stripe: %w", err)
+		}
 	}
 
 	// BRF Intelligence reports table

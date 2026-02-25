@@ -14,6 +14,7 @@ import (
 	"golang.org/x/oauth2/google"
 
 	"k2MarketingAi/internal/auth"
+	"k2MarketingAi/internal/billing"
 	"k2MarketingAi/internal/brfintel"
 	"k2MarketingAi/internal/config"
 	"k2MarketingAi/internal/events"
@@ -166,7 +167,28 @@ func main() {
 		Renderer: visionRenderer,
 		Imagen:   imagenRenderer,
 	}
-	srv := server.New(cfg.Port, authHandler, authMiddleware, listingHandler, visionHandler, brfIntelHandler, staticFS)
+
+	// Stripe billing
+	billingHandler := billing.NewHandler(store, billing.Config{
+		SecretKey:      cfg.Stripe.SecretKey,
+		WebhookSecret:  cfg.Stripe.WebhookSecret,
+		PriceID:        cfg.Stripe.PriceID,
+		SuccessURL:     cfg.Stripe.SuccessURL,
+		CancelURL:      cfg.Stripe.CancelURL,
+		PublishableKey: cfg.Stripe.PublishableKey,
+		PricingTableID: cfg.Stripe.PricingTableID,
+	})
+	if cfg.Stripe.SecretKey != "" {
+		log.Println("stripe billing: enabled")
+	} else {
+		log.Println("stripe billing: disabled (no secret key)")
+	}
+
+	// Usage limiter – free tier: 10 AI calls, then require subscription.
+	usageLimiter := auth.UsageLimiter{Store: store}
+	log.Printf("usage limiter: free tier = %d AI calls", storage.FreeUsageLimit)
+
+	srv := server.New(cfg.Port, authHandler, authMiddleware, usageLimiter, listingHandler, visionHandler, brfIntelHandler, billingHandler, staticFS)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

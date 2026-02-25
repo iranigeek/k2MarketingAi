@@ -76,6 +76,7 @@ function setUser(user) {
         sidebarLabel.textContent = user?.email || 'Inloggad';
     }
     enterAppShell();
+    renderSubscriptionStatus();
 }
 
 function resetAppData() {
@@ -125,6 +126,27 @@ function authCopyForMode(mode) {
 
 function maybeOpenAuthFromQuery() {
     const params = new URLSearchParams(window.location.search);
+
+    // Handle Stripe checkout return
+    const subscriptionResult = params.get('subscription');
+    if (subscriptionResult) {
+        params.delete('subscription');
+        const nextQuery = params.toString();
+        const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
+        window.history.replaceState({}, '', nextURL);
+        if (subscriptionResult === 'success' && state.user) {
+            // Refresh user to get updated subscription status
+            checkSession();
+            setTimeout(() => {
+                showView('settings');
+                alert('Prenumerationen är nu aktiv! Välkommen.');
+            }, 500);
+            return;
+        } else if (subscriptionResult === 'cancelled') {
+            // User cancelled checkout
+        }
+    }
+
     const raw = (params.get('auth') || '').toLowerCase();
     const mode = raw === 'register' ? 'register' : raw === 'login' ? 'login' : '';
     if (!mode) return;
@@ -312,8 +334,28 @@ window.fetch = async (input, init = {}) => {
     if (res.status === 401) {
         handleUnauthorized('Sessionen har gått ut. Logga in igen.');
     }
+    if (res.status === 402) {
+        handleUsageLimitReached();
+    }
     return res;
 };
+
+function handleUsageLimitReached() {
+    const modal = document.createElement('div');
+    modal.className = 'usage-limit-modal';
+    modal.innerHTML = `
+        <div class="usage-limit-card">
+            <h2>Gränsen nådd</h2>
+            <p>Du har använt alla dina kostnadsfria AI-anrop.</p>
+            <p class="muted">Uppgradera till en prenumeration för obegränsad tillgång till alla AI-funktioner.</p>
+            <div class="actions" style="margin-top:1rem;display:flex;gap:0.5rem;">
+                <button class="primary" onclick="this.closest('.usage-limit-modal').remove();showView('view-settings');renderSubscriptionStatus();">Visa prenumerationer</button>
+                <button class="ghost" onclick="this.closest('.usage-limit-modal').remove();">Stäng</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
 
 async function fetchListings() {
     try {
@@ -2768,6 +2810,169 @@ async function initApp() {
     if (!state.user) return;
     await fetchStyleProfiles();
     await fetchListings();
+    renderSubscriptionStatus();
+}
+
+// ── Stripe Billing ──
+
+function renderSubscriptionStatus() {
+    const infoEl = document.getElementById('subscription-info');
+    const actionsEl = document.getElementById('subscription-actions');
+    if (!infoEl || !actionsEl) return;
+
+    const user = state.user;
+    if (!user) {
+        infoEl.innerHTML = '<p class="muted">Logga in för att se prenumeration.</p>';
+        actionsEl.innerHTML = '';
+        return;
+    }
+
+    const status = user.subscription_status || '';
+    const usageCount = user.usage_count || 0;
+    const usageLimit = user.usage_limit || 10;
+    const isPaid = status === 'active' || status === 'trialing';
+    let badge = '';
+    let description = '';
+
+    switch (status) {
+        case 'active':
+            badge = '<span class="badge badge--success">Aktiv</span>';
+            description = 'Din prenumeration är aktiv. Du har obegränsad tillgång till alla AI-funktioner.';
+            break;
+        case 'trialing':
+            badge = '<span class="badge badge--info">Provperiod</span>';
+            description = 'Du använder en kostnadsfri provperiod med obegränsade anrop.';
+            break;
+        case 'past_due':
+            badge = '<span class="badge badge--warning">Förfallen betalning</span>';
+            description = 'Senaste betalningen misslyckades. Uppdatera din betalningsmetod för att fortsätta.';
+            break;
+        case 'canceled':
+            badge = '<span class="badge badge--danger">Avslutad</span>';
+            description = 'Din prenumeration har avslutats. Starta en ny för att fortsätta använda AI-funktionerna.';
+            break;
+        default:
+            badge = '<span class="badge badge--neutral">Gratisplan</span>';
+            description = `Du använder gratisplanen med ${usageLimit} kostnadsfria AI-anrop.`;
+            break;
+    }
+
+    // Usage meter
+    const remaining = isPaid ? '∞' : Math.max(0, usageLimit - usageCount);
+    const usagePct = isPaid ? 0 : Math.min(100, Math.round((usageCount / usageLimit) * 100));
+    const meterColor = usagePct >= 100 ? '#ef4444' : usagePct >= 70 ? '#eab308' : '#22c55e';
+
+    infoEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+            <strong>Status:</strong> ${badge}
+        </div>
+        <p class="muted">${description}</p>
+        <div class="usage-meter" style="margin-top:1rem;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span class="muted" style="font-size:0.85rem;">AI-anrop använda</span>
+                <strong style="font-size:0.85rem;">${isPaid ? 'Obegränsat' : usageCount + ' / ' + usageLimit}</strong>
+            </div>
+            ${!isPaid ? `
+            <div style="background:#e5e7eb;border-radius:6px;height:8px;overflow:hidden;">
+                <div style="background:${meterColor};height:100%;width:${usagePct}%;border-radius:6px;transition:width 0.3s;"></div>
+            </div>
+            <p class="muted" style="font-size:0.8rem;margin-top:4px;">${remaining === 0 ? 'Inga anrop kvar – uppgradera för att fortsätta.' : remaining + ' anrop kvar'}</p>
+            ` : ''}
+        </div>
+    `;
+
+    let buttons = '';
+    if (status === 'active' || status === 'trialing' || status === 'past_due') {
+        buttons = '<button class="secondary" onclick="openBillingPortal()">Hantera prenumeration</button>';
+    } else {
+        buttons = '<div id="stripe-pricing-table-container"></div>';
+    }
+    actionsEl.innerHTML = buttons;
+
+    // Embed Stripe Pricing Table if the user isn't paid.
+    if (!isPaid) {
+        renderStripePricingTable();
+    }
+
+    // Also update the sidebar mini-widget
+    renderSidebarUsage();
+}
+
+function renderSidebarUsage() {
+    const el = document.getElementById('sidebar-usage');
+    if (!el) return;
+    const user = state.user;
+    if (!user) { el.innerHTML = ''; return; }
+
+    const status = user.subscription_status || '';
+    const usageCount = user.usage_count || 0;
+    const usageLimit = user.usage_limit || 10;
+    const isPaid = status === 'active' || status === 'trialing';
+    const remaining = isPaid ? null : Math.max(0, usageLimit - usageCount);
+    const pct = isPaid ? 0 : Math.min(100, Math.round((usageCount / usageLimit) * 100));
+    const color = pct >= 100 ? '#ef4444' : pct >= 70 ? '#eab308' : '#22c55e';
+
+    if (isPaid) {
+        el.innerHTML = `<span style="color:#22c55e;font-weight:600;">Pro – obegränsat</span>`;
+    } else {
+        el.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                <span>AI-anrop</span>
+                <strong>${usageCount}/${usageLimit}</strong>
+            </div>
+            <div class="usage-mini-bar"><div class="usage-mini-fill" style="width:${pct}%;background:${color};"></div></div>
+            ${remaining === 0 ? '<a href="#" onclick="event.preventDefault();showView(\'view-settings\');renderSubscriptionStatus();" style="color:#ef4444;font-size:0.75rem;">Uppgradera</a>' : ''}
+        `;
+    }
+}
+
+async function renderStripePricingTable() {
+    const container = document.getElementById('stripe-pricing-table-container');
+    if (!container) return;
+
+    // Fetch the public stripe config from the server.
+    try {
+        const res = await fetch('/api/billing/config');
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (!cfg.publishable_key || !cfg.pricing_table_id) {
+            container.innerHTML = '<p class="muted">Prenumerationsuppgradering är inte konfigurerad.</p>';
+            return;
+        }
+        const user = state.user;
+        const table = document.createElement('stripe-pricing-table');
+        table.setAttribute('pricing-table-id', cfg.pricing_table_id);
+        table.setAttribute('publishable-key', cfg.publishable_key);
+        if (user) {
+            table.setAttribute('client-reference-id', user.id);
+            table.setAttribute('customer-email', user.email);
+        }
+        container.innerHTML = '';
+        container.appendChild(table);
+    } catch (err) {
+        console.error('Failed to load pricing table config', err);
+    }
+}
+
+async function openBillingPortal() {
+    try {
+        const res = await fetch('/api/billing/portal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) {
+            const msg = await res.text();
+            alert(msg || 'Kunde inte öppna kundportalen');
+            return;
+        }
+        const data = await res.json();
+        if (data.url) {
+            window.location.href = data.url;
+        }
+    } catch (err) {
+        console.error('portal error', err);
+        alert('Kunde inte öppna kundportalen');
+    }
 }
 
 async function deleteListing(id) {

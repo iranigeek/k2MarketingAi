@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
+    <script async src="https://js.stripe.com/v3/pricing-table.js"></script>
 </head>
 <body class="is-landing">
     <div class="landing site-redesign">
@@ -285,6 +286,7 @@
                 <span class="sidebar__label">Inställningar</span>
             </a>
         </nav>
+        <div class="sidebar__usage" id="sidebar-usage"></div>
         <div class="sidebar__brand sidebar__footer">
             <div class="sidebar__brand-email" id="user-email-sidebar">Ej inloggad</div>
             <button class="ghost sidebar__logout" id="logout-btn" type="button">Logga ut</button>
@@ -757,6 +759,15 @@
         </div>
 
         <div id="view-settings" class="view">
+            <section class="panel" id="subscription-panel">
+                <p class="eyebrow">Prenumeration</p>
+                <h2>Ditt abonnemang</h2>
+                <div id="subscription-info">
+                    <p class="muted">Laddar prenumerationsstatus...</p>
+                </div>
+                <div id="subscription-actions" class="actions" style="margin-top:1rem;"></div>
+            </section>
+
             <section class="panel">
                 <p class="eyebrow">Stilprofiler</p>
                 <h2>Träna tonen</h2>

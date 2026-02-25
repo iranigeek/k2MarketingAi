@@ -163,10 +163,14 @@ func (h Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.setSessionCookie(w, user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = jsonResponse(w, http.StatusOK, map[string]any{
-		"id":         user.ID,
-		"email":      user.Email,
-		"created_at": user.CreatedAt,
-		"approved":   user.Approved,
+		"id":                  user.ID,
+		"email":               user.Email,
+		"created_at":          user.CreatedAt,
+		"approved":            user.Approved,
+		"subscription_status": user.SubscriptionStatus,
+		"plan_id":             user.PlanID,
+		"usage_count":         user.UsageCount,
+		"usage_limit":         storage.FreeUsageLimit,
 	})
 }
 
@@ -186,10 +190,14 @@ func (h Handler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = jsonResponse(w, http.StatusOK, map[string]any{
-		"id":         user.ID,
-		"email":      user.Email,
-		"created_at": user.CreatedAt,
-		"approved":   user.Approved,
+		"id":                  user.ID,
+		"email":               user.Email,
+		"created_at":          user.CreatedAt,
+		"approved":            user.Approved,
+		"subscription_status": user.SubscriptionStatus,
+		"plan_id":             user.PlanID,
+		"usage_count":         user.UsageCount,
+		"usage_limit":         storage.FreeUsageLimit,
 	})
 }
 

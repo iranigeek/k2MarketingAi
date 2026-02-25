@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"k2MarketingAi/internal/auth"
+	"k2MarketingAi/internal/billing"
 	"k2MarketingAi/internal/brfintel"
 	"k2MarketingAi/internal/listings"
 	"k2MarketingAi/internal/vision"
@@ -20,7 +21,7 @@ const (
 )
 
 // New constructs the HTTP server with routes and middleware.
-func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, listingHandler listings.Handler, visionHandler vision.Handler, brfIntelHandler brfintel.Handler, staticFS http.Handler) *http.Server {
+func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, usageLimiter auth.UsageLimiter, listingHandler listings.Handler, visionHandler vision.Handler, brfIntelHandler brfintel.Handler, billingHandler billing.Handler, staticFS http.Handler) *http.Server {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
@@ -41,20 +42,27 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 			r.Get("/me", authHandler.Me)
 		})
 
+		// Stripe webhook – no auth required (verified via signature).
+		r.Post("/billing/webhook", billingHandler.HandleWebhook)
+		// Public billing config (publishable key + pricing table ID).
+		r.Get("/billing/config", billingHandler.GetConfig)
+
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth)
 			r.Post("/uploads", listingHandler.UploadMedia)
-			r.Post("/annual-reports/extract", listingHandler.ExtractAnnualReport)
-			r.Post("/annual-reports/summarize", listingHandler.SummarizeAnnualReport)
+			// Billing endpoints (authenticated, no usage limit).
+			r.Route("/billing", func(r chi.Router) {
+				r.Get("/subscription", billingHandler.GetSubscription)
+				r.Post("/checkout", billingHandler.CreateCheckout)
+				r.Post("/portal", billingHandler.CreatePortal)
+			})
 			r.Route("/listings", func(r chi.Router) {
 				r.Get("/", listingHandler.List)
-				r.Post("/", listingHandler.Create)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", listingHandler.Get)
 					r.Post("/images", listingHandler.AttachImage)
 					r.Post("/annual-report", listingHandler.AttachAnnualReport)
 					r.Delete("/annual-report", listingHandler.DetachAnnualReport)
-					r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
 					r.Patch("/sections/{slug}", listingHandler.UpdateSection)
 					r.Delete("/sections/{slug}", listingHandler.DeleteSection)
 					r.Get("/export", listingHandler.ExportFullCopy)
@@ -66,20 +74,29 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 				r.Post("/", listingHandler.SaveStyleProfile)
 			})
 			r.Get("/events", listingHandler.StreamEvents)
-			r.Route("/vision", func(r chi.Router) {
-				r.Post("/analyze", visionHandler.Analyze)
-				r.Post("/design", visionHandler.Design)
-				r.Post("/render", visionHandler.Render)
-			})
 			r.Route("/brf-intel", func(r chi.Router) {
-				r.Post("/analyze", brfIntelHandler.Analyze)
-				r.Post("/analyze-pdf", brfIntelHandler.AnalyzePDF)
-				r.Post("/analyze-listing/{id}", brfIntelHandler.AnalyzeFromListing)
-				r.Post("/score-quick", brfIntelHandler.ScoreQuick)
 				r.Get("/reports", brfIntelHandler.List)
 				r.Get("/recent", brfIntelHandler.RecentReports)
 				r.Get("/reports/{id}", brfIntelHandler.Get)
 				r.Delete("/reports/{id}", brfIntelHandler.Delete)
+			})
+
+			// ── AI-powered routes: require paid subscription or free-tier quota ──
+			r.Group(func(r chi.Router) {
+				r.Use(usageLimiter.RequirePaidOrQuota)
+				r.Post("/listings", listingHandler.Create)
+				r.Post("/listings/{id}/sections/{slug}/rewrite", listingHandler.RewriteSection)
+				r.Post("/annual-reports/extract", listingHandler.ExtractAnnualReport)
+				r.Post("/annual-reports/summarize", listingHandler.SummarizeAnnualReport)
+				r.Route("/vision", func(r chi.Router) {
+					r.Post("/analyze", visionHandler.Analyze)
+					r.Post("/design", visionHandler.Design)
+					r.Post("/render", visionHandler.Render)
+				})
+				r.Post("/brf-intel/analyze", brfIntelHandler.Analyze)
+				r.Post("/brf-intel/analyze-pdf", brfIntelHandler.AnalyzePDF)
+				r.Post("/brf-intel/analyze-listing/{id}", brfIntelHandler.AnalyzeFromListing)
+				r.Post("/brf-intel/score-quick", brfIntelHandler.ScoreQuick)
 			})
 		})
 	})

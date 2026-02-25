@@ -14,6 +14,18 @@ type Config struct {
 	Geodata     GeodataConfig `json:"geodata"`
 	AI          AIConfig      `json:"ai"`
 	Auth        AuthConfig    `json:"auth"`
+	Stripe      StripeConfig  `json:"stripe"`
+}
+
+// StripeConfig holds Stripe API credentials and product settings.
+type StripeConfig struct {
+	SecretKey      string `json:"secret_key"`
+	WebhookSecret  string `json:"webhook_secret"`
+	PriceID        string `json:"price_id"`
+	SuccessURL     string `json:"success_url"`
+	CancelURL      string `json:"cancel_url"`
+	PublishableKey string `json:"publishable_key"`
+	PricingTableID string `json:"pricing_table_id"`
 }
 
 // MediaConfig describes S3/media related configuration.
