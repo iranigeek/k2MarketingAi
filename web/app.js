@@ -2198,7 +2198,67 @@ const brfIntelState = {
     report: null,
     history: [],
     uploading: false,
+    timerInterval: null,
+    timerStart: 0,
 };
+
+function startBRFIntelLoader() {
+    const loader = document.getElementById('brfintel-loader');
+    const timerEl = document.getElementById('brfintel-timer');
+    const textEl = document.getElementById('brfintel-loader-text');
+    const stepsEl = document.getElementById('brfintel-loader-steps');
+    if (!loader) return;
+    loader.classList.add('active');
+    brfIntelState.timerStart = Date.now();
+
+    const phases = [
+        { after: 0,  label: 'Laddar upp PDF...' },
+        { after: 3,  label: 'Extraherar text ur PDF...' },
+        { after: 8,  label: 'Kontrollerar textkvalitet...' },
+        { after: 14, label: 'AI-OCR pågår (skannad PDF)...' },
+        { after: 30, label: 'Analyserar ekonomi och nyckeltal...' },
+        { after: 50, label: 'Beräknar poäng och risker...' },
+        { after: 70, label: 'Skriver köparsammanfattning...' },
+        { after: 90, label: 'Nästan klar...' },
+    ];
+
+    function tick() {
+        const elapsed = Math.floor((Date.now() - brfIntelState.timerStart) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = elapsed % 60;
+        if (timerEl) timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+        // Update phase text
+        let currentPhase = phases[0];
+        for (const p of phases) {
+            if (elapsed >= p.after) currentPhase = p;
+        }
+        if (textEl) textEl.textContent = currentPhase.label;
+
+        // Update step list
+        if (stepsEl) {
+            stepsEl.innerHTML = phases
+                .filter(p => p.after <= elapsed + 2)
+                .map(p => {
+                    const done = elapsed >= p.after + 5;
+                    const current = !done && elapsed >= p.after;
+                    const cls = done ? 'done' : current ? 'current' : '';
+                    return `<span class="brfintel-loader__step ${cls}">${p.label.replace('...', '')}</span>`;
+                }).join('');
+        }
+    }
+    tick();
+    brfIntelState.timerInterval = setInterval(tick, 1000);
+}
+
+function stopBRFIntelLoader() {
+    if (brfIntelState.timerInterval) {
+        clearInterval(brfIntelState.timerInterval);
+        brfIntelState.timerInterval = null;
+    }
+    const loader = document.getElementById('brfintel-loader');
+    if (loader) loader.classList.remove('active');
+}
 
 function handleBRFIntelFileChange(fileList) {
     const file = fileList?.[0];
@@ -2216,9 +2276,10 @@ function handleBRFIntelFileChange(fileList) {
 async function uploadBRFIntelPDF(file) {
     if (brfIntelState.uploading) return;
     brfIntelState.uploading = true;
-    brfIntelState.status = 'Laddar upp och analyserar årsredovisningen... (kan ta 30–90 sekunder)';
+    brfIntelState.status = '';
     brfIntelState.report = null;
     renderBRFIntelResult();
+    startBRFIntelLoader();
 
     const formData = new FormData();
     formData.append('file', file);
@@ -2247,6 +2308,7 @@ async function uploadBRFIntelPDF(file) {
         brfIntelState.report = null;
     } finally {
         brfIntelState.uploading = false;
+        stopBRFIntelLoader();
         renderBRFIntelResult();
         loadBRFIntelHistory();
     }
