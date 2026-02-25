@@ -69,11 +69,11 @@ func (h Handler) GetSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResp(w, http.StatusOK, map[string]any{
 		"subscription_status": user.SubscriptionStatus,
-		"subscription_id":    user.SubscriptionID,
-		"plan_id":            user.PlanID,
-		"stripe_customer_id": user.StripeCustomerID,
-		"usage_count":        user.UsageCount,
-		"usage_limit":        storage.FreeUsageLimit,
+		"subscription_id":     user.SubscriptionID,
+		"plan_id":             user.PlanID,
+		"stripe_customer_id":  user.StripeCustomerID,
+		"usage_count":         user.UsageCount,
+		"usage_limit":         storage.FreeUsageLimit,
 	})
 }
 
