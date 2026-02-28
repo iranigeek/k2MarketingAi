@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"k2MarketingAi/internal/llm"
@@ -178,16 +179,17 @@ func (a *Analyzer) extractFinancialsFromText(ctx context.Context, text string) (
 
 	modelCtx := llm.WithModel(ctx, "gemini-3-pro-preview")
 
-	// Truncate if needed
+	// Truncate if needed — keep more text for better extraction
 	sanitized := text
-	if len(sanitized) > 20000 {
-		sanitized = sanitized[:20000]
+	if len(sanitized) > 40000 {
+		sanitized = sanitized[:40000]
 	}
 
 	systemPrompt := `Du är en svensk ekonom som analyserar årsredovisningar från bostadsrättsföreningar.
 
 Extrahera alla tillgängliga ekonomiska nyckeltal. Om data finns för flera år, inkludera alla.
-Svara ENBART med JSON, ingen annan text. Använd 0 för saknade numeriska värden.`
+Svara ENBART med JSON, ingen annan text. Använd 0 för saknade numeriska värden.
+VIKTIGT: Returnera ENBART giltig JSON — ingen inledande text, ingen markdown, inga kommentarer.`
 
 	userPrompt := fmt.Sprintf(`Text från årsredovisning:
 """
@@ -243,12 +245,14 @@ Inkludera yearly_snapshots för varje år du hittar data. Fyll i alla fält du k
 	reply, err := a.llm.ChatCompletion(modelCtx, []llm.ChatMessage{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userPrompt},
-	}, 0.15)
+	}, 0.1)
 	if err != nil {
 		return Financials{}, fmt.Errorf("extract financials LLM: %w", err)
 	}
 
-	// Clean JSON
+	log.Printf("brfintel: extractFinancials LLM reply length=%d", len(reply))
+
+	// Clean JSON — robust extraction
 	clean := cleanLLMJSON(reply)
 
 	var fin Financials
@@ -256,7 +260,14 @@ Inkludera yearly_snapshots för varje år du hittar data. Fyll i alla fält du k
 		// Try via map for flexible parsing
 		var m map[string]any
 		if uerr := json.Unmarshal([]byte(clean), &m); uerr != nil {
-			return Financials{}, fmt.Errorf("parse LLM response: %w (snippet: %s)", uerr, firstN(clean, 200))
+			// Last resort: try to find JSON object in the response
+			extracted := extractJSONFromText(reply)
+			if extracted != "" {
+				if jerr := json.Unmarshal([]byte(extracted), &m); jerr == nil {
+					return financialsFromMap(m), nil
+				}
+			}
+			return Financials{}, fmt.Errorf("parse LLM response: %w (snippet: %s)", uerr, firstN(clean, 300))
 		}
 		fin = financialsFromMap(m)
 	}
@@ -304,12 +315,82 @@ func nonEmpty(s, fallback string) string {
 
 func cleanLLMJSON(s string) string {
 	trim := strings.TrimSpace(s)
+
+	// Remove markdown code fences (```json ... ``` or ``` ... ```)
 	if strings.HasPrefix(trim, "```") {
-		trim = strings.TrimPrefix(trim, "```json")
-		trim = strings.TrimPrefix(trim, "```")
-		trim = strings.TrimSuffix(trim, "```")
+		// Find the end of the first line (language tag line)
+		if idx := strings.Index(trim, "\n"); idx != -1 {
+			trim = trim[idx+1:]
+		} else {
+			trim = strings.TrimPrefix(trim, "```json")
+			trim = strings.TrimPrefix(trim, "```")
+		}
+		// Remove trailing fence
+		if lastIdx := strings.LastIndex(trim, "```"); lastIdx >= 0 {
+			trim = trim[:lastIdx]
+		}
 	}
+
+	trim = strings.TrimSpace(trim)
+
+	// If there's leading text before the first { or [, strip it
+	if !strings.HasPrefix(trim, "{") && !strings.HasPrefix(trim, "[") {
+		if braceIdx := strings.Index(trim, "{"); braceIdx >= 0 {
+			trim = trim[braceIdx:]
+		}
+	}
+
+	// If there's trailing text after the last } or ], strip it
+	if lastBrace := strings.LastIndex(trim, "}"); lastBrace >= 0 {
+		if lastBracket := strings.LastIndex(trim, "]"); lastBracket > lastBrace {
+			trim = trim[:lastBracket+1]
+		} else {
+			trim = trim[:lastBrace+1]
+		}
+	}
+
 	return strings.TrimSpace(trim)
+}
+
+// extractJSONFromText tries harder to find a valid JSON object in messy LLM output.
+func extractJSONFromText(s string) string {
+	// Find the first { and try to extract a balanced JSON object
+	start := strings.Index(s, "{")
+	if start < 0 {
+		return ""
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+	for i := start; i < len(s); i++ {
+		ch := s[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if ch == '\\' && inString {
+			escaped = true
+			continue
+		}
+		if ch == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		if ch == '{' {
+			depth++
+		} else if ch == '}' {
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+
+	return ""
 }
 
 func firstN(s string, n int) string {

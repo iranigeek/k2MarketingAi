@@ -144,8 +144,10 @@ func (h Handler) AnalyzePDF(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Step 3: Run BRF Intelligence Pipeline ──
+	log.Printf("brfintel: starting intelligence pipeline for brf=%s rawTextLen=%d", brfName, len(req.RawText))
 	report, err := h.Analyzer.Analyze(r.Context(), req, user.ID)
 	if err != nil {
+		log.Printf("brfintel: pipeline FAILED for brf=%s: %v", brfName, err)
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "ingen data") {
 			status = http.StatusBadRequest
@@ -153,6 +155,7 @@ func (h Handler) AnalyzePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("analys misslyckades: %v", err), status)
 		return
 	}
+	log.Printf("brfintel: pipeline OK for brf=%s score=%d risks=%d", brfName, report.Score.Total, len(report.Risks))
 
 	// Add source document metadata
 	report.SourceDocuments = append(report.SourceDocuments, SourceDocument{

@@ -3,6 +3,7 @@ package brfintel
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -55,16 +56,21 @@ func (a *Analyzer) Analyze(ctx context.Context, req AnalyzeRequest, ownerID stri
 	}
 
 	// ── Step 1: Build financials from structured or raw input ──
+	log.Printf("brfintel: [%s] step 1 — building financials (reports=%d rawText=%d listingID=%s)",
+		req.BRFName, len(req.Reports), len(req.RawText), req.ListingID)
 	financials, sourceYears, sourceDocs, err := a.buildFinancials(ctx, req)
 	if err != nil {
 		return report, fmt.Errorf("build financials: %w", err)
 	}
+	log.Printf("brfintel: [%s] step 1 OK — years=%v debt=%.0f netResult=%.0f snapshots=%d",
+		req.BRFName, sourceYears, financials.TotalDebt, financials.NetResult, len(financials.YearlySnapshots))
 	report.Financials = financials
 	report.SourceYears = sourceYears
 	report.SourceDocuments = sourceDocs
 
 	// ── Step 2: Compute BRF Score (0–100) ──
 	report.Score = computeScore(financials)
+	log.Printf("brfintel: [%s] step 2 OK — score=%d grade=%s", req.BRFName, report.Score.Total, report.Score.Grade)
 
 	// ── Step 3: Detect risk warnings ──
 	report.Risks = detectRisks(financials)
@@ -74,14 +80,20 @@ func (a *Analyzer) Analyze(ctx context.Context, req AnalyzeRequest, ownerID stri
 
 	// ── Step 5: Generate LLM-powered summaries ──
 	if a.llm != nil {
+		log.Printf("brfintel: [%s] step 5 — generating buyer summary", req.BRFName)
 		buyerSummary, err := a.generateBuyerSummary(ctx, report)
 		if err == nil {
 			report.BuyerSummary = buyerSummary
+		} else {
+			log.Printf("brfintel: [%s] buyer summary failed (non-fatal): %v", req.BRFName, err)
 		}
 
+		log.Printf("brfintel: [%s] step 5 — generating legal view", req.BRFName)
 		legalView, err := a.generateLegalView(ctx, report)
 		if err == nil {
 			report.LegalView = legalView
+		} else {
+			log.Printf("brfintel: [%s] legal view failed (non-fatal): %v", req.BRFName, err)
 		}
 	}
 
