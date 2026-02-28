@@ -40,10 +40,10 @@ type Listing struct {
 	History        History       `json:"section_history,omitempty"`
 	Status         Status        `json:"status,omitempty"`
 	Insights       Insights      `json:"insights,omitempty"`
-	Details        Details        `json:"details,omitempty"`
-	StyleProfile   *StyleProfile  `json:"style_profile,omitempty"`
-	Template       *Template      `json:"template,omitempty"`
-	CreatedAt      time.Time      `json:"created_at"`
+	Details        Details       `json:"details,omitempty"`
+	StyleProfile   *StyleProfile `json:"style_profile,omitempty"`
+	Template       *Template     `json:"template,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
 }
 
 // Section represents an editable block of text in the listing description.
