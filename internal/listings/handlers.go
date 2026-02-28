@@ -69,6 +69,7 @@ type CreateListingRequest struct {
 	Sections       []SectionInput       `json:"sections"`
 	Images         []storage.ImageAsset `json:"images"`
 	StyleProfileID string               `json:"style_profile_id"`
+	TemplateID     string               `json:"template_id"`
 }
 
 // SectionInput allows custom section configuration from the client.
@@ -476,6 +477,15 @@ func (h Handler) Create(w http.ResponseWriter, r *http.Request) {
 	applyImagesToListing(&listing, req.Images)
 	hydrateDetailsFromLegacy(&listing)
 	h.attachStyleProfiles(r.Context(), []*storage.Listing{&listing})
+
+	// Load template if specified
+	if templateID := strings.TrimSpace(req.TemplateID); templateID != "" {
+		if tpl, tplErr := h.Store.GetTemplate(r.Context(), templateID); tplErr == nil {
+			if tpl.OwnerID == user.ID {
+				listing.Template = &tpl
+			}
+		}
+	}
 
 	if h.GeoProvider != nil {
 		searchAddress := combineAddressCity(req.Address, req.City)
@@ -1823,6 +1833,117 @@ func (h Handler) SaveStyleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(profile)
+}
+
+// ── Template endpoints ──
+
+// ListTemplates returns templates for the authenticated user.
+func (h Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+	templates, err := h.Store.ListTemplatesByOwner(r.Context(), user.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if templates == nil {
+		templates = []storage.Template{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(templates)
+}
+
+// SaveTemplate creates or updates a template.
+func (h Handler) SaveTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+	var payload storage.Template
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	payload.Name = strings.TrimSpace(payload.Name)
+	payload.Description = strings.TrimSpace(payload.Description)
+	payload.OwnerID = user.ID
+	if payload.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if len(payload.Sections) == 0 {
+		http.Error(w, "at least one section is required", http.StatusBadRequest)
+		return
+	}
+	// Ensure sections have slugs
+	for i := range payload.Sections {
+		payload.Sections[i].Title = strings.TrimSpace(payload.Sections[i].Title)
+		payload.Sections[i].Slug = strings.TrimSpace(payload.Sections[i].Slug)
+		payload.Sections[i].Description = strings.TrimSpace(payload.Sections[i].Description)
+		if payload.Sections[i].Slug == "" {
+			payload.Sections[i].Slug = fmt.Sprintf("section-%d", i+1)
+		}
+	}
+	tpl, err := h.Store.SaveTemplate(r.Context(), payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(tpl)
+}
+
+// GetTemplate returns a single template.
+func (h Handler) GetTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+	id := chi.URLParam(r, "id")
+	tpl, err := h.Store.GetTemplate(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if tpl.OwnerID != user.ID {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(tpl)
+}
+
+// DeleteTemplate removes a template.
+func (h Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+	id := chi.URLParam(r, "id")
+	tpl, err := h.Store.GetTemplate(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if tpl.OwnerID != user.ID {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.Store.DeleteTemplate(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func normalizeList(values []string) []string {

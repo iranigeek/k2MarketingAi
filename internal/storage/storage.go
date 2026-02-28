@@ -40,9 +40,10 @@ type Listing struct {
 	History        History       `json:"section_history,omitempty"`
 	Status         Status        `json:"status,omitempty"`
 	Insights       Insights      `json:"insights,omitempty"`
-	Details        Details       `json:"details,omitempty"`
-	StyleProfile   *StyleProfile `json:"style_profile,omitempty"`
-	CreatedAt      time.Time     `json:"created_at"`
+	Details        Details        `json:"details,omitempty"`
+	StyleProfile   *StyleProfile  `json:"style_profile,omitempty"`
+	Template       *Template      `json:"template,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
 }
 
 // Section represents an editable block of text in the listing description.
@@ -245,6 +246,24 @@ type TransitInfo struct {
 	Description string `json:"description"`
 }
 
+// Template describes a reusable text structure for listing generation.
+type Template struct {
+	ID          string            `json:"id"`
+	OwnerID     string            `json:"owner_id"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Sections    []TemplateSection `json:"sections"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+}
+
+// TemplateSection describes one block in a user-defined template.
+type TemplateSection struct {
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Description string `json:"description"` // instruction for the AI about this section
+}
+
 // StyleProfile describes a stored tone-of-voice with sample texts.
 type StyleProfile struct {
 	ID             string     `json:"id"`
@@ -318,6 +337,10 @@ type Store interface {
 	SaveStyleProfile(ctx context.Context, profile StyleProfile) (StyleProfile, error)
 	ListStyleProfiles(ctx context.Context) ([]StyleProfile, error)
 	GetStyleProfile(ctx context.Context, id string) (StyleProfile, error)
+	SaveTemplate(ctx context.Context, tpl Template) (Template, error)
+	ListTemplatesByOwner(ctx context.Context, ownerID string) ([]Template, error)
+	GetTemplate(ctx context.Context, id string) (Template, error)
+	DeleteTemplate(ctx context.Context, id string) error
 	CreateUser(ctx context.Context, user User) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
@@ -488,6 +511,19 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`); err != nil {
 		return fmt.Errorf("create brf_reports table: %w", err)
+	}
+
+	// Templates table
+	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS templates (
+		id TEXT PRIMARY KEY,
+		owner_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		sections JSONB DEFAULT '[]'::jsonb,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`); err != nil {
+		return fmt.Errorf("create templates table: %w", err)
 	}
 
 	return nil

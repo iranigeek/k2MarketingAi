@@ -487,6 +487,93 @@ func scanStyleProfile(row rowScanner) (StyleProfile, error) {
 	return profile, nil
 }
 
+// ── Template CRUD ──
+
+// SaveTemplate creates or updates a template.
+func (s *PostgresStore) SaveTemplate(ctx context.Context, tpl Template) (Template, error) {
+	now := time.Now()
+	if tpl.ID == "" {
+		tpl.ID = uuid.NewString()
+		tpl.CreatedAt = now
+	}
+	tpl.UpdatedAt = now
+	sectionsJSON, err := json.Marshal(tpl.Sections)
+	if err != nil {
+		return Template{}, fmt.Errorf("marshal template sections: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO templates (id, owner_id, name, description, sections, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,COALESCE($6, now()),$7)
+		ON CONFLICT (id) DO UPDATE SET
+			name=EXCLUDED.name,
+			description=EXCLUDED.description,
+			sections=EXCLUDED.sections,
+			updated_at=EXCLUDED.updated_at
+	`, tpl.ID, tpl.OwnerID, tpl.Name, tpl.Description, sectionsJSON, nullableTime(tpl.CreatedAt), tpl.UpdatedAt); err != nil {
+		return Template{}, fmt.Errorf("save template: %w", err)
+	}
+	return s.GetTemplate(ctx, tpl.ID)
+}
+
+// ListTemplatesByOwner returns templates for a specific user.
+func (s *PostgresStore) ListTemplatesByOwner(ctx context.Context, ownerID string) ([]Template, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, owner_id, name, description, sections, created_at, updated_at FROM templates WHERE owner_id=$1 ORDER BY name`, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("list templates: %w", err)
+	}
+	defer rows.Close()
+	var templates []Template
+	for rows.Next() {
+		tpl, err := scanTemplate(rows)
+		if err != nil {
+			return nil, err
+		}
+		templates = append(templates, tpl)
+	}
+	return templates, nil
+}
+
+// GetTemplate returns a template by ID.
+func (s *PostgresStore) GetTemplate(ctx context.Context, id string) (Template, error) {
+	row := s.pool.QueryRow(ctx, `SELECT id, owner_id, name, description, sections, created_at, updated_at FROM templates WHERE id=$1`, id)
+	tpl, err := scanTemplate(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Template{}, ErrNotFound
+		}
+		return Template{}, err
+	}
+	return tpl, nil
+}
+
+// DeleteTemplate removes a template by ID.
+func (s *PostgresStore) DeleteTemplate(ctx context.Context, id string) error {
+	ct, err := s.pool.Exec(ctx, `DELETE FROM templates WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("delete template: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanTemplate(row rowScanner) (Template, error) {
+	var (
+		tpl          Template
+		sectionsJSON []byte
+	)
+	if err := row.Scan(&tpl.ID, &tpl.OwnerID, &tpl.Name, &tpl.Description, &sectionsJSON, &tpl.CreatedAt, &tpl.UpdatedAt); err != nil {
+		return Template{}, fmt.Errorf("scan template: %w", err)
+	}
+	if len(sectionsJSON) > 0 {
+		if err := json.Unmarshal(sectionsJSON, &tpl.Sections); err != nil {
+			return Template{}, fmt.Errorf("unmarshal template sections: %w", err)
+		}
+	}
+	return tpl, nil
+}
+
 func scanUser(row rowScanner) (User, error) {
 	var (
 		user             User

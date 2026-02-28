@@ -10,6 +10,8 @@ const state = {
     listingFilter: '',
     styleProfiles: [],
     selectedProfileId: '',
+    templates: [],
+    selectedTemplateId: '',
     visionAnalysis: null,
     visionDesign: null,
     visionRemix: {
@@ -402,6 +404,19 @@ async function fetchStyleProfiles() {
     }
 }
 
+async function fetchTemplates() {
+    try {
+        const res = await fetch('/api/templates/');
+        if (!res.ok) throw new Error('Kunde inte hämta mallar');
+        const payload = await res.json();
+        state.templates = Array.isArray(payload) ? payload : [];
+        renderTemplateSelectOptions();
+        renderTemplateList();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
 function buildPayloadFromForm() {
     const highlights = listFromLines(value('highlights'));
     const images = state.uploads
@@ -428,12 +443,14 @@ function buildPayloadFromForm() {
         tone: document.getElementById('tone').value,
         length: document.getElementById('length').value,
         style_profile_id: document.getElementById('style-profile').value || '',
+        template_id: document.getElementById('template-select')?.value || '',
         highlights,
         target_audience: 'Bred målgrupp',
         fee: 0,
         images,
     };
     state.selectedProfileId = payload.style_profile_id || '';
+    state.selectedTemplateId = payload.template_id || '';
     return payload;
 }
 
@@ -445,7 +462,7 @@ async function handleCreate(e) {
         return;
     }
     setFormBusy(true);
-    setAIStatus('Genererar annons med vald ton...', true);
+    showGenerationLoader();
     try {
         const res = await fetch('/api/listings/', {
             method: 'POST',
@@ -459,6 +476,7 @@ async function handleCreate(e) {
         const created = await res.json();
         state.selectedId = created.id;
         state.editingListingId = created.id;
+        completeGenerationLoader();
         await fetchListings();
         state.uploads = [];
         renderUploads();
@@ -467,6 +485,7 @@ async function handleCreate(e) {
     } catch (err) {
         alert(err.message);
         setAIStatus('', false, true);
+        hideGenerationLoader();
     } finally {
         setFormBusy(false);
     }
@@ -1343,6 +1362,25 @@ function bindEvents() {
             state.selectedProfileId = styleSelect.value || '';
         });
     }
+    const templateSelect = document.getElementById('template-select');
+    if (templateSelect) {
+        templateSelect.addEventListener('change', () => {
+            state.selectedTemplateId = templateSelect.value || '';
+        });
+    }
+    // Template form
+    const templateForm = document.getElementById('template-form');
+    if (templateForm) {
+        templateForm.addEventListener('submit', handleTemplateFormSubmit);
+    }
+    const templateReset = document.getElementById('template-reset');
+    if (templateReset) {
+        templateReset.addEventListener('click', resetTemplateForm);
+    }
+    const templateAddSection = document.getElementById('template-add-section');
+    if (templateAddSection) {
+        templateAddSection.addEventListener('click', () => addTemplateSectionRow());
+    }
 
     const sidebarToggle = document.getElementById('sidebar-toggle');
     if (sidebarToggle) {
@@ -1776,6 +1814,287 @@ function selectProfileForForm(id) {
     setProfileStatus(id ? 'Profil vald i generatorn.' : '', false);
 }
 
+// ── Template CRUD ──
+
+function renderTemplateSelectOptions() {
+    const select = document.getElementById('template-select');
+    if (!select) return;
+    const previous = select.value || state.selectedTemplateId || '';
+    select.innerHTML = '<option value="">Standard (inledning, rum, område, sammanfattning)</option>';
+    state.templates.forEach(tpl => {
+        const option = document.createElement('option');
+        option.value = tpl.id;
+        const sectionCount = (tpl.sections || []).length;
+        option.textContent = `${tpl.name} (${sectionCount} sektioner)`;
+        select.appendChild(option);
+    });
+    if (previous && state.templates.some(t => t.id === previous)) {
+        select.value = previous;
+    } else {
+        select.value = '';
+    }
+    state.selectedTemplateId = select.value || '';
+}
+
+function renderTemplateList() {
+    const container = document.getElementById('template-list');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!state.templates.length) {
+        container.innerHTML = '<p class="muted">Inga mallar skapade ännu.</p>';
+        return;
+    }
+    state.templates.forEach(tpl => {
+        const card = document.createElement('div');
+        card.className = 'template-card';
+
+        const header = document.createElement('div');
+        header.className = 'template-card__header';
+        header.innerHTML = `<strong>${tpl.name}</strong><span class="muted">${(tpl.sections || []).length} sektioner</span>`;
+
+        const desc = document.createElement('p');
+        desc.className = 'template-card__desc muted';
+        desc.textContent = tpl.description || 'Ingen beskrivning.';
+
+        const sectionsPreview = document.createElement('div');
+        sectionsPreview.className = 'template-card__sections';
+        (tpl.sections || []).forEach(sec => {
+            const badge = document.createElement('span');
+            badge.className = 'template-section-badge';
+            badge.textContent = sec.title;
+            if (sec.description) {
+                badge.title = sec.description;
+            }
+            sectionsPreview.appendChild(badge);
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'template-card__actions';
+
+        const useBtn = document.createElement('button');
+        useBtn.type = 'button';
+        useBtn.className = 'secondary';
+        useBtn.textContent = 'Använd i generatorn';
+        useBtn.addEventListener('click', () => {
+            state.selectedTemplateId = tpl.id;
+            const select = document.getElementById('template-select');
+            if (select) select.value = tpl.id;
+            setTemplateStatus('Mall vald i generatorn.', false);
+            showView('generator');
+        });
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'ghost';
+        editBtn.textContent = 'Redigera';
+        editBtn.addEventListener('click', () => fillTemplateForm(tpl));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'ghost';
+        deleteBtn.style.color = '#b42318';
+        deleteBtn.textContent = 'Ta bort';
+        deleteBtn.addEventListener('click', () => deleteTemplate(tpl.id));
+
+        actions.appendChild(useBtn);
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
+
+        card.appendChild(header);
+        card.appendChild(desc);
+        card.appendChild(sectionsPreview);
+        card.appendChild(actions);
+        container.appendChild(card);
+    });
+}
+
+function addTemplateSectionRow(slug = '', title = '', description = '') {
+    const container = document.getElementById('template-sections');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'template-section-row';
+    row.innerHTML = `
+        <div class="template-section-row__fields">
+            <input type="text" class="tpl-sec-title" placeholder="Sektionsnamn (t.ex. Inledning)" value="${escapeHtml(title)}" required>
+            <input type="text" class="tpl-sec-slug" placeholder="Slug (t.ex. intro)" value="${escapeHtml(slug)}">
+            <textarea class="tpl-sec-desc" rows="2" placeholder="Instruktion till AI (t.ex. 'Skriv en säljande ingress med fokus på läge och ljus')">${escapeHtml(description)}</textarea>
+        </div>
+        <button type="button" class="ghost template-section-remove" title="Ta bort sektion">✕</button>
+    `;
+    row.querySelector('.template-section-remove').addEventListener('click', () => row.remove());
+    container.appendChild(row);
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+function collectTemplateSections() {
+    const rows = document.querySelectorAll('.template-section-row');
+    const sections = [];
+    rows.forEach((row, i) => {
+        const title = row.querySelector('.tpl-sec-title')?.value.trim() || '';
+        const slug = row.querySelector('.tpl-sec-slug')?.value.trim() || `section-${i + 1}`;
+        const description = row.querySelector('.tpl-sec-desc')?.value.trim() || '';
+        if (title) {
+            sections.push({ slug, title, description });
+        }
+    });
+    return sections;
+}
+
+function fillTemplateForm(tpl) {
+    if (!tpl) return;
+    document.getElementById('template-id').value = tpl.id || '';
+    document.getElementById('template-name').value = tpl.name || '';
+    document.getElementById('template-description').value = tpl.description || '';
+    const container = document.getElementById('template-sections');
+    if (container) container.innerHTML = '';
+    (tpl.sections || []).forEach(sec => {
+        addTemplateSectionRow(sec.slug, sec.title, sec.description);
+    });
+    setTemplateStatus(`Redigerar "${tpl.name}"`, false);
+    const formEl = document.getElementById('template-form');
+    if (formEl) {
+        formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function resetTemplateForm() {
+    document.getElementById('template-id').value = '';
+    document.getElementById('template-name').value = '';
+    document.getElementById('template-description').value = '';
+    const container = document.getElementById('template-sections');
+    if (container) container.innerHTML = '';
+    setTemplateStatus('', false);
+}
+
+function setTemplateStatus(message, isError) {
+    const el = document.getElementById('template-status');
+    if (!el) return;
+    el.textContent = message || '';
+    el.style.color = isError ? '#b42318' : 'var(--muted)';
+}
+
+async function handleTemplateFormSubmit(event) {
+    event.preventDefault();
+    const sections = collectTemplateSections();
+    if (sections.length === 0) {
+        setTemplateStatus('Lägg till minst en sektion.', true);
+        return;
+    }
+    const payload = {
+        id: document.getElementById('template-id').value.trim(),
+        name: document.getElementById('template-name').value.trim(),
+        description: document.getElementById('template-description').value.trim(),
+        sections,
+    };
+    if (!payload.name) {
+        setTemplateStatus('Mallnamn krävs.', true);
+        return;
+    }
+    try {
+        const res = await fetch('/api/templates/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Kunde inte spara mall');
+        }
+        await fetchTemplates();
+        resetTemplateForm();
+        setTemplateStatus('Mall sparad!', false);
+    } catch (err) {
+        setTemplateStatus(err.message, true);
+    }
+}
+
+async function deleteTemplate(id) {
+    if (!id) return;
+    const ok = window.confirm('Ta bort denna mall?');
+    if (!ok) return;
+    try {
+        const res = await fetch(`/api/templates/${id}/`, { method: 'DELETE' });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Kunde inte ta bort mall');
+        }
+        if (state.selectedTemplateId === id) {
+            state.selectedTemplateId = '';
+            const select = document.getElementById('template-select');
+            if (select) select.value = '';
+        }
+        await fetchTemplates();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+// ── Generation Loading Overlay ──
+
+let generationTimerInterval = null;
+let generationStartTime = null;
+
+function showGenerationLoader() {
+    const loader = document.getElementById('generation-loader');
+    if (!loader) return;
+    loader.classList.remove('hidden');
+    // Reset steps
+    document.querySelectorAll('.generation-step').forEach(el => {
+        el.classList.remove('active', 'done');
+    });
+    // Start timer
+    generationStartTime = Date.now();
+    const timerEl = document.getElementById('generation-timer');
+    if (timerEl) timerEl.textContent = '0:00';
+    generationTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - generationStartTime) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = String(elapsed % 60).padStart(2, '0');
+        if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+    }, 1000);
+    // Animate steps
+    const stepData = document.getElementById('gen-step-data');
+    const stepGeo = document.getElementById('gen-step-geo');
+    const stepAI = document.getElementById('gen-step-ai');
+    if (stepData) stepData.classList.add('active');
+    setTimeout(() => {
+        if (stepData) { stepData.classList.remove('active'); stepData.classList.add('done'); }
+        if (stepGeo) stepGeo.classList.add('active');
+    }, 1500);
+    setTimeout(() => {
+        if (stepGeo) { stepGeo.classList.remove('active'); stepGeo.classList.add('done'); }
+        if (stepAI) stepAI.classList.add('active');
+    }, 3000);
+}
+
+function completeGenerationLoader() {
+    const stepAI = document.getElementById('gen-step-ai');
+    const stepDone = document.getElementById('gen-step-done');
+    if (stepAI) { stepAI.classList.remove('active'); stepAI.classList.add('done'); }
+    if (stepDone) stepDone.classList.add('done');
+    if (generationTimerInterval) {
+        clearInterval(generationTimerInterval);
+        generationTimerInterval = null;
+    }
+    setTimeout(() => {
+        hideGenerationLoader();
+    }, 1200);
+}
+
+function hideGenerationLoader() {
+    const loader = document.getElementById('generation-loader');
+    if (loader) loader.classList.add('hidden');
+    if (generationTimerInterval) {
+        clearInterval(generationTimerInterval);
+        generationTimerInterval = null;
+    }
+}
+
 function resetGeneratorForm() {
     const form = document.getElementById('listing-form');
     if (form) {
@@ -1798,10 +2117,15 @@ function resetGeneratorForm() {
     state.uploads = [];
     renderUploads();
     setAIStatus('', false);
+    hideGenerationLoader();
     toggleFloorField();
     const styleSelect = document.getElementById('style-profile');
     if (styleSelect) {
         styleSelect.value = state.selectedProfileId || '';
+    }
+    const templateSelect = document.getElementById('template-select');
+    if (templateSelect) {
+        templateSelect.value = state.selectedTemplateId || '';
     }
 }
 
@@ -2703,6 +3027,9 @@ function showView(view) {
     if (view === 'vision') {
         renderVisionLab();
     }
+    if (view === 'templates') {
+        fetchTemplates();
+    }
     if (view === 'brfintel') {
         loadBRFIntelHistory();
     }
@@ -2809,6 +3136,7 @@ checkSession().finally(maybeOpenAuthFromQuery);
 async function initApp() {
     if (!state.user) return;
     await fetchStyleProfiles();
+    await fetchTemplates();
     await fetchListings();
     renderSubscriptionStatus();
 }

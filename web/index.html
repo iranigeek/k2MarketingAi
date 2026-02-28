@@ -428,12 +428,47 @@
                             </select>
                             <p class="muted helper-text">Välj en sparad ton/stilprofil för att använda kundens favoritspråk i genereringen.</p>
                         </div>
+                        <div class="field">
+                            <label for="template-select">Annonsmall</label>
+                            <select id="template-select" name="template_id">
+                                <option value="">Standard (inledning, rum, område, sammanfattning)</option>
+                            </select>
+                            <p class="muted helper-text">Välj en sparad mall för att styra annonsens struktur och sektioner.</p>
+                        </div>
                         <div class="actions">
                             <button type="submit" class="primary">Generera annons</button>
                             <p id="form-message" role="status"></p>
                         </div>
                     </form>
                 </section>
+
+                <!-- Loading overlay for AI generation -->
+                <div id="generation-loader" class="generation-loader hidden">
+                    <div class="generation-loader__content">
+                        <div class="generation-spinner"></div>
+                        <h3>AI genererar din annons</h3>
+                        <p class="muted" id="generation-loader-text">Analyserar underlag och skriver text...</p>
+                        <div class="generation-loader__steps">
+                            <div class="generation-step" id="gen-step-data">
+                                <span class="generation-step__icon">📋</span>
+                                <span>Samlar fakta</span>
+                            </div>
+                            <div class="generation-step" id="gen-step-geo">
+                                <span class="generation-step__icon">🗺️</span>
+                                <span>Hämtar geodata</span>
+                            </div>
+                            <div class="generation-step" id="gen-step-ai">
+                                <span class="generation-step__icon">🤖</span>
+                                <span>AI skriver text</span>
+                            </div>
+                            <div class="generation-step" id="gen-step-done">
+                                <span class="generation-step__icon">✅</span>
+                                <span>Klar!</span>
+                            </div>
+                        </div>
+                        <div class="generation-loader__timer" id="generation-timer">0:00</div>
+                    </div>
+                </div>
 
                 <section class="panel editor" id="editor-panel">
                     <header class="editor__header">
@@ -750,11 +785,39 @@
         </div>
 
         <div id="view-templates" class="view">
-            <section class="panel">
-                <p class="eyebrow">Mallar</p>
-                <h2>Annonsmallar</h2>
-                <p class="muted">Spara och återanvänd ton och struktur för olika målgrupper.</p>
-                <p class="muted">Lägg till mallkort och knappar för att välja mall.</p>
+            <section class="panel templates-panel">
+                <div class="templates-panel__header">
+                    <div>
+                        <p class="eyebrow">Mallar</p>
+                        <h2>Annonsmallar</h2>
+                        <p class="muted">Skapa och återanvänd strukturer för dina annonser. Varje mall definierar vilka sektioner AI:n ska generera.</p>
+                    </div>
+                </div>
+                <form id="template-form" class="minimal-form template-form">
+                    <input type="hidden" id="template-id">
+                    <div class="field">
+                        <label for="template-name">Mallnamn*</label>
+                        <input id="template-name" type="text" placeholder="T.ex. Lyxig bostadsrätt" required>
+                    </div>
+                    <div class="field">
+                        <label for="template-description">Beskrivning</label>
+                        <textarea id="template-description" rows="2" placeholder="Beskriv när denna mall passar bäst"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Sektioner*</label>
+                        <p class="muted helper-text">Definiera vilka delar annonsen ska innehålla. AI:n genererar text för varje sektion.</p>
+                        <div id="template-sections" class="template-sections"></div>
+                        <button type="button" class="ghost" id="template-add-section">+ Lägg till sektion</button>
+                    </div>
+                    <div class="actions">
+                        <button type="submit" class="primary">Spara mall</button>
+                        <button type="button" class="ghost" id="template-reset">Rensa</button>
+                        <p id="template-status" class="muted" role="status"></p>
+                    </div>
+                </form>
+                <div id="template-list" class="template-list">
+                    <p class="muted">Inga mallar skapade ännu.</p>
+                </div>
             </section>
         </div>
 

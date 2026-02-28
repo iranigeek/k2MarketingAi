@@ -15,6 +15,7 @@ type InMemoryStore struct {
 	mu            sync.RWMutex
 	listings      []Listing
 	styleProfiles map[string]StyleProfile
+	templates     map[string]Template
 	users         map[string]User
 	emailIndex    map[string]string
 }
@@ -24,6 +25,7 @@ func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		listings:      make([]Listing, 0),
 		styleProfiles: make(map[string]StyleProfile),
+		templates:     make(map[string]Template),
 		users:         make(map[string]User),
 		emailIndex:    make(map[string]string),
 	}
@@ -365,5 +367,63 @@ func (s *InMemoryStore) ResetUsage(_ context.Context, userID string) error {
 	}
 	user.UsageCount = 0
 	s.users[userID] = user
+	return nil
+}
+
+// ── Template CRUD (in-memory) ──
+
+// SaveTemplate stores or updates a template in memory.
+func (s *InMemoryStore) SaveTemplate(_ context.Context, tpl Template) (Template, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	if tpl.ID == "" {
+		tpl.ID = uuid.NewString()
+		tpl.CreatedAt = now
+	} else if existing, ok := s.templates[tpl.ID]; ok {
+		if tpl.CreatedAt.IsZero() {
+			tpl.CreatedAt = existing.CreatedAt
+		}
+	}
+	if tpl.CreatedAt.IsZero() {
+		tpl.CreatedAt = now
+	}
+	tpl.UpdatedAt = now
+	s.templates[tpl.ID] = tpl
+	return tpl, nil
+}
+
+// ListTemplatesByOwner returns templates for a given owner.
+func (s *InMemoryStore) ListTemplatesByOwner(_ context.Context, ownerID string) ([]Template, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var result []Template
+	for _, tpl := range s.templates {
+		if tpl.OwnerID == ownerID {
+			result = append(result, tpl)
+		}
+	}
+	return result, nil
+}
+
+// GetTemplate returns a template by ID.
+func (s *InMemoryStore) GetTemplate(_ context.Context, id string) (Template, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	tpl, ok := s.templates[id]
+	if !ok {
+		return Template{}, ErrNotFound
+	}
+	return tpl, nil
+}
+
+// DeleteTemplate removes a template by ID.
+func (s *InMemoryStore) DeleteTemplate(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.templates[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.templates, id)
 	return nil
 }

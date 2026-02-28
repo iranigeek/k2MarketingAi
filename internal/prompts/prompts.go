@@ -29,8 +29,9 @@ Data:
 %s`
 
 type structuredSection struct {
-	Slug  string `json:"slug"`
-	Title string `json:"title"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
 }
 
 // BuildGenerationPrompts composes the system + user prompt pair used for text generation.
@@ -47,6 +48,9 @@ func BuildGenerationPrompts(listing storage.Listing) (string, string, error) {
 	if profile := FormatStyleProfile(listing.StyleProfile); profile != "" {
 		userPrompt = fmt.Sprintf("%s\n\n%s", userPrompt, profile)
 	}
+	if listing.Template != nil && len(listing.Template.Sections) > 0 {
+		userPrompt = fmt.Sprintf("%s\n\n%s", userPrompt, FormatTemplate(listing.Template))
+	}
 	return systemPrompt, userPrompt, nil
 }
 
@@ -56,6 +60,27 @@ func SystemPrompt() string {
 }
 
 func buildStructuredPayload(listing storage.Listing) (string, error) {
+	// Determine sections: use template sections if available, otherwise default
+	sections := []structuredSection{
+		{Slug: "intro", Title: "Inledning"},
+		{Slug: "hall", Title: "Hall"},
+		{Slug: "kitchen", Title: "Kök"},
+		{Slug: "living", Title: "Vardagsrum"},
+		{Slug: "sleep", Title: "Sovrum & bad"},
+		{Slug: "area", Title: "Område & kommunikation"},
+		{Slug: "closing", Title: "Sammanfattning"},
+	}
+	if listing.Template != nil && len(listing.Template.Sections) > 0 {
+		sections = make([]structuredSection, len(listing.Template.Sections))
+		for i, ts := range listing.Template.Sections {
+			sections[i] = structuredSection{
+				Slug:        ts.Slug,
+				Title:       ts.Title,
+				Description: ts.Description,
+			}
+		}
+	}
+
 	payload, err := json.Marshal(struct {
 		Address        string              `json:"address"`
 		Neighborhood   string              `json:"neighborhood"`
@@ -97,15 +122,7 @@ func buildStructuredPayload(listing storage.Listing) (string, error) {
 		GeodataSummary: geodata.FormatSummary(listing.Insights.Geodata),
 		Details:        listing.Details,
 		StyleProfileID: strings.TrimSpace(listing.Details.Meta.StyleProfileID),
-		Sections: []structuredSection{
-			{Slug: "intro", Title: "Inledning"},
-			{Slug: "hall", Title: "Hall"},
-			{Slug: "kitchen", Title: "Kök"},
-			{Slug: "living", Title: "Vardagsrum"},
-			{Slug: "sleep", Title: "Sovrum & bad"},
-			{Slug: "area", Title: "Område & kommunikation"},
-			{Slug: "closing", Title: "Sammanfattning"},
-		},
+		Sections:       sections,
 	})
 	if err != nil {
 		return "", err
@@ -143,5 +160,26 @@ func FormatStyleProfile(profile *storage.StyleProfile) string {
 	if profile.CustomModel != "" {
 		fmt.Fprintf(&b, "\n- Denna kund tränas mot modellen: %s", profile.CustomModel)
 	}
+	return b.String()
+}
+
+// FormatTemplate renders a user template as prompt instructions for custom sections.
+func FormatTemplate(tpl *storage.Template) string {
+	if tpl == nil || len(tpl.Sections) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "VIKTIGT: Användaren har valt mallen \"%s\". Följ mallens struktur exakt.", tpl.Name)
+	if tpl.Description != "" {
+		fmt.Fprintf(&b, "\nMallbeskrivning: %s", tpl.Description)
+	}
+	fmt.Fprintf(&b, "\nGenerera exakt dessa sektioner i denna ordning:")
+	for i, sec := range tpl.Sections {
+		fmt.Fprintf(&b, "\n%d. slug=\"%s\", title=\"%s\"", i+1, sec.Slug, sec.Title)
+		if sec.Description != "" {
+			fmt.Fprintf(&b, " — Instruktion: %s", sec.Description)
+		}
+	}
+	fmt.Fprintf(&b, "\nAnvända bara dessa sektioner, inga andra. Varje sektion ska ha content anpassad efter instruktionen.")
 	return b.String()
 }

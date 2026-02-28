@@ -73,6 +73,14 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 				r.Get("/", listingHandler.ListStyleProfiles)
 				r.Post("/", listingHandler.SaveStyleProfile)
 			})
+			r.Route("/templates", func(r chi.Router) {
+				r.Get("/", listingHandler.ListTemplates)
+				r.Post("/", listingHandler.SaveTemplate)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", listingHandler.GetTemplate)
+					r.Delete("/", listingHandler.DeleteTemplate)
+				})
+			})
 			r.Get("/events", listingHandler.StreamEvents)
 			r.Route("/brf-intel", func(r chi.Router) {
 				r.Get("/reports", brfIntelHandler.List)
