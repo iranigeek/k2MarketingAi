@@ -295,7 +295,7 @@ type User struct {
 }
 
 // FreeUsageLimit is the maximum number of AI calls for non-paying users.
-const FreeUsageLimit = 10
+const FreeUsageLimit = 3
 
 // HasActiveSubscription returns true when the user has a paying subscription.
 func (u User) HasActiveSubscription() bool {

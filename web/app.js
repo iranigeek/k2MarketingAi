@@ -1,5 +1,6 @@
 const state = {
     user: null,
+    usageLocked: false,
     authMode: 'login',
     listings: [],
     current: null,
@@ -73,20 +74,33 @@ function redirectToLanding(message = 'Logga in eller skapa konto.') {
 
 function setUser(user) {
     state.user = user;
+    state.usageLocked = isUsageLocked(user);
     const sidebarLabel = document.getElementById('user-email-sidebar');
     if (sidebarLabel) {
         sidebarLabel.textContent = user?.email || 'Inloggad';
     }
     enterAppShell();
     renderSubscriptionStatus();
+    if (state.usageLocked) {
+        showView('settings');
+    }
 }
 
 function resetAppData() {
     state.listings = [];
     state.current = null;
     state.selectedId = null;
+    state.usageLocked = false;
     renderObjectList();
     renderDetail();
+}
+
+function isUsageLocked(user = state.user) {
+    if (!user) return false;
+    const status = user.subscription_status || '';
+    const isPaid = status === 'active' || status === 'trialing';
+    const usageCount = user.usage_count || 0;
+    return !isPaid && usageCount >= 3;
 }
 
 function showAuthOverlay(message = 'Logga in för att fortsätta') {
@@ -343,15 +357,22 @@ window.fetch = async (input, init = {}) => {
 };
 
 function handleUsageLimitReached() {
+    state.usageLocked = true;
+    if (state.user) {
+        state.user.usage_count = Math.max(state.user.usage_count || 0, 3);
+    }
+    showView('settings');
+    renderSubscriptionStatus();
+    renderSidebarUsage();
     const modal = document.createElement('div');
     modal.className = 'usage-limit-modal';
     modal.innerHTML = `
         <div class="usage-limit-card">
             <h2>Gränsen nådd</h2>
-            <p>Du har använt alla dina kostnadsfria AI-anrop.</p>
+            <p>Du har använt dina 3 kostnadsfria AI-anrop.</p>
             <p class="muted">Uppgradera till en prenumeration för obegränsad tillgång till alla AI-funktioner.</p>
             <div class="actions" style="margin-top:1rem;display:flex;gap:0.5rem;">
-                <button class="primary" onclick="this.closest('.usage-limit-modal').remove();showView('view-settings');renderSubscriptionStatus();">Visa prenumerationer</button>
+                <button class="primary" onclick="this.closest('.usage-limit-modal').remove();showView('settings');renderSubscriptionStatus();">Visa prenumerationer</button>
                 <button class="ghost" onclick="this.closest('.usage-limit-modal').remove();">Stäng</button>
             </div>
         </div>
@@ -1420,7 +1441,7 @@ function bindEvents() {
         btn.addEventListener('click', () => {
             const view = btn.dataset.viewTrigger;
             showView(view);
-            if (view === 'generator') {
+            if (view === 'generator' && !state.usageLocked) {
                 resetGeneratorForm();
             }
         });
@@ -3010,6 +3031,9 @@ function formatMinutes(minutes) {
 }
 
 function showView(view) {
+    if (state.usageLocked && view !== 'settings') {
+        view = 'settings';
+    }
     const targetId = `view-${view}`;
     document.body.className = document.body.className
         .split(' ')
@@ -3029,6 +3053,9 @@ function showView(view) {
     }
     if (view === 'templates') {
         fetchTemplates();
+    }
+    if (view === 'style-profiles') {
+        fetchStyleProfiles();
     }
     if (view === 'brfintel') {
         loadBRFIntelHistory();
@@ -3073,6 +3100,10 @@ function updateTopbarCopy(view) {
         templates: {
             title: 'Mallar',
             subtitle: 'Återanvänd strukturer och tonlägen.',
+        },
+        'style-profiles': {
+            title: 'Träna tonen',
+            subtitle: 'Skapa och hantera stilprofiler för varje kund.',
         },
         settings: {
             title: 'Inställningar',
@@ -3156,9 +3187,9 @@ function renderSubscriptionStatus() {
     }
 
     const status = user.subscription_status || '';
-    const usageCount = user.usage_count || 0;
-    const usageLimit = user.usage_limit || 10;
     const isPaid = status === 'active' || status === 'trialing';
+    const usageCount = user.usage_count || 0;
+    const usageLimit = isPaid ? (user.usage_limit || 3) : 3;
     let badge = '';
     let description = '';
 
@@ -3233,9 +3264,9 @@ function renderSidebarUsage() {
     if (!user) { el.innerHTML = ''; return; }
 
     const status = user.subscription_status || '';
-    const usageCount = user.usage_count || 0;
-    const usageLimit = user.usage_limit || 10;
     const isPaid = status === 'active' || status === 'trialing';
+    const usageCount = user.usage_count || 0;
+    const usageLimit = isPaid ? (user.usage_limit || 3) : 3;
     const remaining = isPaid ? null : Math.max(0, usageLimit - usageCount);
     const pct = isPaid ? 0 : Math.min(100, Math.round((usageCount / usageLimit) * 100));
     const color = pct >= 100 ? '#ef4444' : pct >= 70 ? '#eab308' : '#22c55e';
@@ -3249,7 +3280,7 @@ function renderSidebarUsage() {
                 <strong>${usageCount}/${usageLimit}</strong>
             </div>
             <div class="usage-mini-bar"><div class="usage-mini-fill" style="width:${pct}%;background:${color};"></div></div>
-            ${remaining === 0 ? '<a href="#" onclick="event.preventDefault();showView(\'view-settings\');renderSubscriptionStatus();" style="color:#ef4444;font-size:0.75rem;">Uppgradera</a>' : ''}
+            ${remaining === 0 ? '<a href="#" onclick="event.preventDefault();showView(\'settings\');renderSubscriptionStatus();" style="color:#ef4444;font-size:0.75rem;">Uppgradera</a>' : ''}
         `;
     }
 }

@@ -43,7 +43,7 @@
                     <h1>Bygg annonser snabbare med en arbetsyta som t&auml;nker som en m&auml;klare.</h1>
                     <p class="lead">Vemra samlar fakta, bilder och dokument i ett fl&ouml;de och genererar tydliga texter som g&aring;r att publicera direkt.</p>
                     <div class="hero__buttons">
-                        <button class="primary" data-auth-trigger="register" type="button">Kom ig&aring;ng gratis</button>
+                        <button class="primary" data-auth-trigger="register" type="button">Kom ig&aring;ng - 3 gratis AI-anrop</button>
                         <button class="secondary" data-auth-trigger="login" type="button">Logga in</button>
                     </div>
                     <div class="hero__stats">
@@ -106,25 +106,41 @@
         <section class="product" id="product">
             <div class="section-head">
                 <p class="pill">En samlad arbetsyta</p>
-                <h2>Allt du behöver för proffsiga annonser.</h2>
-                <p class="lead">Skapa annonser, analysera bilder och lyft nyckeltal — utan att byta verktyg.</p>
+                <h2>Alla funktioner fr&aring;n arbetsbordet p&aring; ett st&auml;lle.</h2>
+                <p class="lead">Detta &auml;r samma funktioner som finns i baksidan efter inloggning.</p>
             </div>
             <div class="product__grid">
                 <article class="product-card">
+                    <h3>Mina objekt</h3>
+                    <p>Samla och hantera alla objekt i en lista med snabb &ouml;verblick.</p>
+                </article>
+                <article class="product-card">
                     <h3>Annonsgenerator</h3>
-                    <p>Fakta in, tre färdiga versioner ut. Ton, längd och målgrupp styrs per objekt.</p>
+                    <p>Skapa annonser och omskrivningar med val av ton, l&auml;ngd och m&aring;lgrupp.</p>
+                </article>
+                <article class="product-card">
+                    <h3>&Aring;rsredovisning</h3>
+                    <p>Extrahera avgift, skulds&auml;ttning och nyckeltal direkt fr&aring;n PDF.</p>
+                </article>
+                <article class="product-card">
+                    <h3>BRF Analys</h3>
+                    <p>F&aring; po&auml;ng, riskindikatorer, trender och snabb j&auml;mf&ouml;relse f&ouml;r BRF.</p>
+                </article>
+                <article class="product-card">
+                    <h3>Statistik</h3>
+                    <p>Se aktivitet, volym och tidsbesparing f&ouml;r team och objekt.</p>
                 </article>
                 <article class="product-card">
                     <h3>Bildstudio</h3>
-                    <p>Analys av rum, stil och detaljer. Koppla renderingar direkt till objektet.</p>
+                    <p>Analysera bilder, skapa designf&ouml;rslag och generera renderingar.</p>
                 </article>
                 <article class="product-card">
-                    <h3>Årsredovisning</h3>
-                    <p>Plocka avgift, skuldsättning och risker från PDF på sekunder.</p>
+                    <h3>Mallar</h3>
+                    <p>Bygg sektioner och strukturer som kan &aring;teranv&auml;ndas i hela teamet.</p>
                 </article>
                 <article class="product-card">
-                    <h3>Versioner & mallar</h3>
-                    <p>Bygg kunders tonalitet och återanvänd i hela teamet.</p>
+                    <h3>Tr&auml;na tonen</h3>
+                    <p>Skapa stilprofiler med exempeltexter f&ouml;r varje kund och omr&aring;de.</p>
                 </article>
             </div>
         </section>
@@ -203,7 +219,7 @@
             <div>
                 <p class="pill">N&auml;sta steg</p>
                 <h2>Logga in för att öppna ditt arbetsbord.</h2>
-                <p class="lead">Skapa konto gratis eller logga in direkt om du redan är kund.</p>
+                <p class="lead">Skapa konto och testa med 3 gratis AI-anrop, eller logga in direkt om du redan är kund.</p>
             </div>
             <div class="landing-buttons">
                 <button class="primary" data-auth-trigger="register" type="button">Skapa konto</button>
@@ -280,6 +296,10 @@
             <a class="sidebar__item" href="#" data-view="templates">
                 <span class="icon">🧩</span>
                 <span class="sidebar__label">Mallar</span>
+            </a>
+            <a class="sidebar__item" href="#" data-view="style-profiles">
+                <span class="icon">TT</span>
+                <span class="sidebar__label">Träna tonen</span>
             </a>
             <a class="sidebar__item" href="#" data-view="settings">
                 <span class="icon">⚙️</span>
@@ -830,7 +850,9 @@
                 </div>
                 <div id="subscription-actions" class="actions" style="margin-top:1rem;"></div>
             </section>
+        </div>
 
+        <div id="view-style-profiles" class="view">
             <section class="panel">
                 <p class="eyebrow">Stilprofiler</p>
                 <h2>Träna tonen</h2>
@@ -940,4 +962,5 @@
     <script src="/app.js"></script>
 </body>
 </html>
+
 
