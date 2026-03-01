@@ -178,7 +178,7 @@ func (g *GeminiImageGenerator) EditImage(ctx context.Context, prompt string, ima
 
 	resp, err := client.Models.GenerateContent(childCtx, g.model, contents, &genai.GenerateContentConfig{
 		ResponseModalities: []string{"IMAGE", "TEXT"},
-		Temperature: floatPtr(0.9),
+		Temperature:        floatPtr(0.9),
 	})
 	if err != nil {
 		return ImageResult{}, fmt.Errorf("vision: redigering misslyckades: %w", err)
