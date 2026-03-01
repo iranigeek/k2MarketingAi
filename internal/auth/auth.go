@@ -110,7 +110,7 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Email:        email,
 		PasswordHash: string(hashed),
 		CreatedAt:    time.Now(),
-		Approved:     false,
+		Approved:     true,
 	}
 	created, err := h.Store.CreateUser(r.Context(), user)
 	if err != nil {
@@ -128,7 +128,7 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 		"email":      created.Email,
 		"created_at": created.CreatedAt,
 		"approved":   created.Approved,
-		"status":     "pending_approval",
+		"status":     "approved",
 	})
 }
 

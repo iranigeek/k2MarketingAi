@@ -248,7 +248,7 @@ func (s *InMemoryStore) CreateUser(_ context.Context, user User) (User, error) {
 		user.CreatedAt = time.Now()
 	}
 	user.Email = email
-	user.Approved = false
+	user.Approved = true
 	s.users[user.ID] = user
 	s.emailIndex[email] = user.ID
 	return user, nil

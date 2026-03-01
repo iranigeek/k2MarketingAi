@@ -299,9 +299,9 @@ func (s *PostgresStore) CreateUser(ctx context.Context, user User) (User, error)
 	if user.CreatedAt.IsZero() {
 		user.CreatedAt = time.Now()
 	}
-	user.Approved = false
+	user.Approved = true
 	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
-	if _, err := s.pool.Exec(ctx, `INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)`, user.ID, user.Email, user.PasswordHash, user.CreatedAt); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO users (id, email, password_hash, approved, created_at) VALUES ($1, $2, $3, $4, $5)`, user.ID, user.Email, user.PasswordHash, user.Approved, user.CreatedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return User{}, ErrUserExists
