@@ -740,110 +740,138 @@ function renderAnnualInsights(detail) {
     `;
 }
 
-async function handleVisionAnalyze(event) {
-    event.preventDefault();
-    const input = document.getElementById('vision-image-url');
-    const fileInput = document.getElementById('vision-image-file');
-    if (!input) return;
-    const imageURL = input.value.trim();
-    const file = fileInput?.files?.[0];
-    if (!imageURL && !file) {
-        setVisionStatus('analyze', 'Ange en länk eller välj en bildfil.', true);
-        return;
+// ── Studio (simplified one-flow image redesign) ──────────────────────────
+
+function openStudioDialog() {
+    const overlay = document.getElementById('studio-dialog-overlay');
+    const preview = document.getElementById('studio-dialog-preview');
+    if (!overlay) return;
+    if (state.visionRemix.previewURL) {
+        preview.innerHTML = `<img src="${state.visionRemix.previewURL}" alt="Rum">`;
     }
-    if (!imageURL) {
-        setVisionStatus('analyze', 'Analyserar bild...', false);
-    } else {
-        setVisionStatus('analyze', 'Analyserar bild...', false);
-    }
-    try {
-        let res;
-        if (file) {
-            const formData = new FormData();
-            formData.append('image_file', file);
-            if (imageURL) {
-                formData.append('image_url', imageURL);
-            }
-            res = await fetch('/api/vision/analyze', {
-                method: 'POST',
-                body: formData,
-            });
-        } else {
-            res = await fetch('/api/vision/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image_url: imageURL }),
-            });
-        }
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || 'Misslyckades med bildanalys');
-        }
-        state.visionAnalysis = await res.json();
-        setVisionStatus('analyze', 'Analysen är klar.', false);
-        if (fileInput) {
-            fileInput.value = '';
-        }
-        renderVisionLab();
-    } catch (err) {
-        setVisionStatus('analyze', err.message, true);
-    }
+    overlay.classList.remove('hidden');
+    setStudioStep(2);
 }
 
-async function handleVisionDesign(event) {
-    event.preventDefault();
-    const promptEl = document.getElementById('vision-design-prompt');
-    const styleEl = document.getElementById('vision-style');
-    if (!promptEl || !styleEl) return;
-    const extra = promptEl.value.trim();
-    const style = styleEl.value;
-    const analysis = state.visionRemix.analysis;
-    if (!analysis && !extra) {
-        setVisionStatus('design', 'Ladda upp en bild eller skriv en instruktion.', true);
-        return;
-    }
-    const prompt = buildDesignPrompt(style, extra, analysis);
-    setVisionStatus('design', 'Skapar designförslag...', false);
-    try {
-        const res = await fetch('/api/vision/design', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
-        });
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || 'Misslyckades med designförslag');
-        }
-        state.visionDesign = await res.json();
-        setVisionStatus('design', 'Designförslaget är klart.', false);
-        renderVisionLab();
-    } catch (err) {
-        setVisionStatus('design', err.message, true);
-    }
+function closeStudioDialog() {
+    document.getElementById('studio-dialog-overlay')?.classList.add('hidden');
 }
 
-async function handleVisionRender() {
-    const promptEl = document.getElementById('vision-design-prompt');
-    const styleEl = document.getElementById('vision-style');
-    if (!styleEl) return;
-    const extra = promptEl?.value.trim() || '';
-    const style = styleEl.value;
-    const analysis = state.visionRemix.analysis;
-    if (!analysis && !extra && !state.visionDesign) {
-        setVisionStatus('render', 'Skapa först en designidé eller skriv instruktioner.', true);
-        return;
-    }
-    const prompt = buildImagePrompt(style, extra, analysis);
-    setVisionStatus('render', 'Genererar visualisering...', false);
+/** Update the step indicator bar */
+function setStudioStep(activeStep) {
+    const steps = document.querySelectorAll('.studio-step');
+    steps.forEach(el => {
+        const step = parseInt(el.dataset.step, 10);
+        el.classList.toggle('done', step < activeStep);
+        el.classList.toggle('active', step === activeStep);
+    });
+}
+
+/** Get the currently selected style from the style card grid */
+function getSelectedStyle() {
+    const active = document.querySelector('.studio-style-card.active');
+    return active?.dataset.style || 'Modern minimalistisk';
+}
+
+function setStudioStatus(msg, isError) {
+    const el = document.getElementById('studio-dialog-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('error', Boolean(isError));
+}
+
+/** Handle file selected via the main dropzone */
+function handleStudioFileSelect(event) {
+    const file = event.target.files?.[0];
+    if (file) processStudioFile(file);
+}
+
+function processStudioFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    state.visionRemix.file = file;
+    state.visionRemix.analysis = null;
+    state.visionRemix.previewURL = '';
     state.visionRenderImage = '';
     state.visionRenderAsset = null;
-    renderVisionLab();
+    state.visionDesign = null;
+    const reader = new FileReader();
+    reader.onload = () => {
+        state.visionRemix.previewURL = reader.result;
+        // Show original immediately, then open the dialog
+        renderStudioResult();
+        openStudioDialog();
+    };
+    reader.readAsDataURL(file);
+}
+
+/** Handle style card click */
+function handleStyleCardClick(event) {
+    const card = event.target.closest('.studio-style-card');
+    if (!card) return;
+    document.querySelectorAll('.studio-style-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+}
+
+/** Build aggressive redesign prompt – sent directly to /api/vision/render */
+function buildStudioPrompt(style, extra) {
+    const parts = [];
+    parts.push('⚠️ VIKTIGASTE REGELN – LÄS FÖRST: Ta ALDRIG bort, lägg till, flytta eller dölj något FÖNSTER. Varje fönster i originalfotot MÅSTE finnas kvar på EXAKT samma plats, storlek och form. Denna regel gäller över ALLA andra instruktioner.');
+    parts.push('');
+    parts.push('🔒 LÅST – FÅR ALDRIG ÄNDRAS:');
+    parts.push('1. KAMERAVINKEL – Behåll EXAKT samma kameravinkel, perspektiv, linsförvrängning, komposition och beskärning.');
+    parts.push('2. FÖNSTER – Samma antal, storlek, position och form. Har fotot 2 fönster ska resultatet ha EXAKT 2 fönster på samma ställe. ALDRIG ta bort ett fönster.');
+    parts.push('');
+    parts.push('✅ FÅR OCH SKA ÄNDRAS DRAMATISKT:');
+    parts.push('• VÄGGFÄRG – måla om till valfri färg');
+    parts.push('• GOLV – byt golvfärg/finish, lägg ny matta');
+    parts.push('• ALLA MÖBLER – byt ut varje soffa, säng, bord, stol, hylla mot helt nya');
+    parts.push('• GARDINER – byt stil/färg (fönstret bakom ska fortfarande synas)');
+    parts.push('• BELYSNING – nya lampor, pendlar, golvlampor');
+    parts.push('• TEXTILIER – nya mattor, kuddar, filtar, sängkläder');
+    parts.push('• VÄGGDEKOR – ny konst, nya speglar, nya hyllor');
+    parts.push('• VÄXTER & TILLBEHÖR – nya växter, böcker, ljus, vaser');
+    parts.push('• DÖRRAR – kan byta färg/stil');
+    parts.push('• TAK – kan byta färg');
+    parts.push('');
+    parts.push('STIL: "' + (style || 'Modern minimalistisk') + '"');
+    parts.push('');
+    parts.push('SÅ HÄR GÖR DU:');
+    parts.push('Steg 1: Töm rummet mentalt – ta bort ALLA flyttbara objekt.');
+    parts.push('Steg 2: Kontrollera att alla fönster fortfarande finns kvar och är orörda.');
+    parts.push('Steg 3: Fyll rummet med en HELT NY inredning. Varje föremål ska vara helt annorlunda.');
+    parts.push('Steg 4: RÄKNA fönstren i resultatet och bekräfta att antalet stämmer med originalet.');
+    parts.push('');
+    parts.push('MINIMUM: huvudmöbel (soffa/säng/matbord), sekundära möbler (soffbord, sidobord, hylla), stor matta, gardiner, 3+ ljuskällor (taklampa + golvlampa + bordslampa), kuddar, 2–3 konstverk, 1–2 växter, dekorativa accessoarer.');
+    if (extra) {
+        parts.push('');
+        parts.push('EXTRA KRAV FRÅN ANVÄNDAREN (obligatoriskt, inte förslag): ' + extra);
+    }
+    parts.push('');
+    parts.push('⚠️ SLUTKONTROLL: Har resultatet SAMMA antal fönster på SAMMA plats som originalet? Om inte, gör om bilden.');
+    parts.push('Förändringen ska vara DRAMATISK – som ett professionellt före/efter i en renoveringsserie. Fotorealistiskt, 4K-kvalitet.');
+    return parts.join('\n');
+}
+
+/** One-click generate: send image + prompt to /api/vision/render */
+async function handleStudioGenerate() {
+    const promptEl = document.getElementById('vision-design-prompt');
+    const genBtn = document.getElementById('studio-generate-btn');
+    const labelSpan = genBtn?.querySelector('.studio-generate-btn__label');
+    const spinnerSpan = genBtn?.querySelector('.studio-generate-btn__spinner');
+    if (!state.visionRemix.previewURL) {
+        setStudioStatus('Ingen bild uppladdad.', true);
+        return;
+    }
+    const style = getSelectedStyle();
+    const extra = promptEl?.value.trim() || '';
+    const prompt = buildStudioPrompt(style, extra);
+    setStudioStatus('Genererar ny inredning – kan ta 20–40 sek…', false);
+    if (genBtn) genBtn.disabled = true;
+    if (labelSpan) labelSpan.textContent = 'Skapar…';
+    if (spinnerSpan) spinnerSpan.classList.remove('hidden');
+
     const baseImageData = (state.visionRemix.previewURL || '').startsWith('data:')
-        ? state.visionRemix.previewURL
-        : '';
-    const baseImageURL = !baseImageData
-        ? state.visionRemix.storageURL || state.current?.image_url || ''
-        : '';
+        ? state.visionRemix.previewURL : '';
     try {
         const res = await fetch('/api/vision/render', {
             method: 'POST',
@@ -851,7 +879,7 @@ async function handleVisionRender() {
             body: JSON.stringify({
                 prompt,
                 base_image_data: baseImageData,
-                base_image_url: baseImageURL,
+                base_image_url: '',
             }),
         });
         if (!res.ok) {
@@ -866,20 +894,68 @@ async function handleVisionRender() {
             state.visionRenderImage = `data:${data.mime || 'image/png'};base64,${data.data}`;
             state.visionRenderAsset = null;
         }
-        setVisionStatus('render', 'Visualisering klar.', false);
-        renderVisionLab();
+        setStudioStatus('', false);
+        closeStudioDialog();
+        setStudioStep(3);
+        renderStudioResult();
     } catch (err) {
         state.visionRenderImage = '';
         state.visionRenderAsset = null;
-        setVisionStatus('render', err.message, true);
-        renderVisionLab();
+        setStudioStatus(err.message, true);
+    } finally {
+        if (genBtn) genBtn.disabled = false;
+        if (labelSpan) labelSpan.textContent = '\u2728 Skapa ny inredning';
+        if (spinnerSpan) spinnerSpan.classList.add('hidden');
     }
+}
+
+/** Show / update the comparison view */
+function renderStudioResult() {
+    const area = document.getElementById('studio-upload-area');
+    const result = document.getElementById('studio-result');
+    const origImg = document.getElementById('studio-original-img');
+    const renderImg = document.getElementById('studio-render-img');
+    if (!result) return;
+
+    if (state.visionRemix.previewURL) {
+        area?.classList.add('hidden');
+        result.classList.remove('hidden');
+        if (origImg) origImg.innerHTML = `<img src="${state.visionRemix.previewURL}" alt="Original">`;
+    }
+    if (state.visionRenderImage) {
+        if (renderImg) renderImg.innerHTML = `<img src="${state.visionRenderImage}" alt="AI-designad">`;
+    } else {
+        if (renderImg) renderImg.innerHTML = '<p class="muted">Bilden visas här efter generering.</p>';
+    }
+
+    // Listing select
+    const renderSelect = document.getElementById('vision-render-listing');
+    if (renderSelect) {
+        const prev = renderSelect.value;
+        renderSelect.innerHTML = '<option value="">Koppla till objekt…</option>' +
+            state.listings.map(item => `<option value="${item.id}">${item.address || 'Namnlöst objekt'}</option>`).join('');
+        if (prev && state.listings.some(item => item.id === prev)) renderSelect.value = prev;
+    }
+    const attachBtn = document.getElementById('vision-render-attach');
+    if (attachBtn) attachBtn.disabled = !state.visionRenderImage;
+}
+
+/** Reset studio to upload state */
+function resetStudio() {
+    state.visionRemix = { previewURL: '', analysis: null, file: null, status: '', storageURL: '', storageKey: '' };
+    state.visionRenderImage = '';
+    state.visionRenderAsset = null;
+    state.visionDesign = null;
+    document.getElementById('studio-upload-area')?.classList.remove('hidden');
+    document.getElementById('studio-result')?.classList.add('hidden');
+    const fileInput = document.getElementById('studio-file-input');
+    if (fileInput) fileInput.value = '';
+    setStudioStep(1);
 }
 
 async function attachRenderToListing() {
     const select = document.getElementById('vision-render-listing');
     const statusEl = document.getElementById('vision-render-link-status');
-    const noteEl = document.getElementById('vision-render-note');
     if (!select || !statusEl) return;
     if (!state.visionRenderImage) {
         statusEl.textContent = 'Generera först en bild.';
@@ -900,16 +976,14 @@ async function attachRenderToListing() {
             const file = await dataURLToFile(state.visionRenderImage, `vision-${Date.now()}.png`);
             asset = await uploadMediaFile(file);
         }
-        const label = noteEl?.value.trim() ? `AI: ${noteEl.value.trim()}` : 'AI-rendering';
         await attachImageToListing(listingId, {
             url: asset.url,
             key: asset.key,
             source: 'ai',
             kind: 'render',
-            label,
+            label: 'AI-rendering',
         });
         statusEl.textContent = 'Bilden kopplades till objektet.';
-        if (noteEl) noteEl.value = '';
         await fetchListings();
     } catch (err) {
         statusEl.textContent = err.message;
@@ -923,81 +997,9 @@ async function dataURLToFile(dataUrl, filename) {
     return new File([blob], filename, { type: blob.type || 'image/png' });
 }
 
-function setVisionStatus(type, message, isError) {
-    const mapping = {
-        design: 'vision-design-status',
-        analyze: 'vision-analyze-status',
-        remix: 'vision-remix-status',
-        render: 'vision-render-status',
-    };
-    const id = mapping[type] || mapping.analyze;
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = message || '';
-    el.classList.toggle('error', Boolean(isError));
-}
-
-function buildDesignPrompt(style, extra, analysis) {
-    const parts = [];
-    if (analysis) {
-        const descriptors = [];
-        if (analysis.summary) {
-            descriptors.push(analysis.summary);
-        }
-        const tagList = []
-            .concat(analysis.notable_details || [])
-            .concat(analysis.tags || []);
-        if (tagList.length) {
-            descriptors.push(`Detaljer att tänka på: ${tagList.join(', ')}`);
-        }
-        if ((analysis.color_palette || []).length) {
-            descriptors.push(`Nuvarande färger: ${(analysis.color_palette || []).join(', ')}`);
-        }
-        const base = [
-            `Utgångsrum: ${analysis.room_type || 'okänt'}`,
-            analysis.style ? `Upplevd stil: ${analysis.style}` : null,
-        ].filter(Boolean).join('. ');
-        parts.push(`${base}. ${descriptors.join(' ')}`);
-    }
-    if (style) {
-        parts.push(`Designen ska kännas "${style}".`);
-    }
-    if (extra) {
-        parts.push(`Extra instruktioner från mäklaren: ${extra}`);
-    }
-    parts.push('Lista vilka möbler, textilier, belysning och dekor som ska läggas till så att ett tomt rum blir komplett.');
-    return parts.join('\n');
-}
-
-function buildImagePrompt(style, extra, analysis) {
-    const parts = [];
-    if (analysis) {
-        parts.push(`Utgå från ett ${analysis.room_type || 'inomhusrum'} som beskrivs så här: ${analysis.summary || ''}`);
-        if ((analysis.color_palette || []).length) {
-            parts.push(`Nuvarande färger: ${(analysis.color_palette || []).join(', ')}`);
-        }
-        if ((analysis.notable_details || []).length) {
-            parts.push(`Detaljer som ska bevaras: ${(analysis.notable_details || []).join(', ')}`);
-        }
-        parts.push('Rendera exakt samma kameravinkel/perspektiv som utgångsbilden. Ändra aldrig väggarnas form, fönstrens placering, dörröppningar eller rummets proportioner.');
-        parts.push('Den enda förändringen ska vara möbler, textilier, belysning och dekor. Arkitekturen, fönster, dörrar och ljusinsläpp måste ligga kvar där de är i originalbilden.');
-        parts.push('Om instruktionen bryts (t.ex. fönster flyttas eller kameran vrids) ska du avvisa ändringen och i stället beskriva hur möblerna placeras med den exakta layouten.');
-    }
-    if (style) {
-        parts.push(`Övergripande känsla: ${style}.`);
-    }
-    if (extra) {
-        parts.push(`Extra instruktioner: ${extra}`);
-    }
-    const concept = state.visionDesign;
-    if (concept) {
-        if (concept.layout) parts.push(`Layoutidé: ${concept.layout}`);
-        if ((concept.items || []).length) parts.push(`Ny inredning: ${(concept.items || []).join(', ')}`);
-        if ((concept.palette || []).length) parts.push(`Önskade färger: ${(concept.palette || []).join(', ')}`);
-        if (concept.lighting) parts.push(`Ljus: ${concept.lighting}`);
-    }
-    parts.push('Rendera en fotorealistisk interiörbild, 4K-upplösning, naturligt ljus, visa hela rummet.');
-    return parts.join('\n');
+// Keep renderVisionLab as a no-op so any existing callers don't break
+function renderVisionLab() {
+    renderStudioResult();
 }
 
 async function attachImageToListing(id, asset) {
@@ -1022,152 +1024,6 @@ async function attachImageToListing(id, asset) {
         renderDetail();
     }
     renderObjectList();
-}
-
-function renderVisionLab() {
-    const analyzeEl = document.getElementById('vision-analyze-result');
-    if (analyzeEl) {
-        const data = state.visionAnalysis;
-        if (!data) {
-            analyzeEl.innerHTML = '<p class="muted">Ingen analys ännu.</p>';
-        } else {
-            const tags = []
-                .concat(data.notable_details || [])
-                .concat((data.color_palette || []).map(color => `Färg: ${color}`))
-                .concat(data.tags || []);
-            analyzeEl.innerHTML = `
-                <h4>${data.room_type || 'Oidentifierat rum'}</h4>
-                <p>${data.summary || 'Inga detaljer angavs.'}</p>
-                <p><strong>Stil:</strong> ${data.style || 'Okänd'}</p>
-                ${tags.length ? `<div class="vision-badges">${tags.map(tag => `<span class="vision-badge">${tag}</span>`).join('')}</div>` : '<p class="muted">Inga etiketter.</p>'}
-            `;
-        }
-    }
-
-    const designEl = document.getElementById('vision-design-output');
-    if (designEl) {
-        const concept = state.visionDesign;
-        if (!concept) {
-            designEl.innerHTML = '<p class="muted">Inget designförslag ännu.</p>';
-        } else {
-            const buildList = (items, label) => {
-                if (!items || !items.length) return '';
-                return `<p class="vision-result__label">${label}</p><ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>`;
-            };
-            designEl.innerHTML = `
-                <h4>${concept.mood || 'Designförslag'}</h4>
-                <p>${concept.summary || ''}</p>
-                ${concept.layout ? `<p><strong>Layout:</strong> ${concept.layout}</p>` : ''}
-                ${concept.lighting ? `<p><strong>Belysning:</strong> ${concept.lighting}</p>` : ''}
-                ${buildList(concept.items, 'Möbler & element')}
-                ${buildList(concept.palette, 'Färgpalett')}
-                ${buildList(concept.notes, 'Noteringar')}
-            `;
-        }
-    }
-
-    const remixPreview = document.getElementById('vision-remix-preview');
-    if (remixPreview) {
-        if (state.visionRemix.previewURL) {
-            remixPreview.innerHTML = `<img src="${state.visionRemix.previewURL}" alt="Förhandsvisning av rum">`;
-        } else {
-            remixPreview.innerHTML = '<p>Ladda upp eller släpp en bild här</p>';
-        }
-    }
-
-    const remixAnalysis = document.getElementById('vision-remix-analysis');
-    if (remixAnalysis) {
-        const insight = state.visionRemix.analysis;
-        if (!insight) {
-            remixAnalysis.innerHTML = '<p class="muted">Ingen bild ännu.</p>';
-        } else {
-            const badges = []
-                .concat(insight.notable_details || [])
-                .concat(insight.tags || [])
-                .slice(0, 6);
-            remixAnalysis.innerHTML = `
-                <h4>${insight.room_type || 'Okänt rum'}</h4>
-                <p>${insight.summary || 'Ingen sammanfattning.'}</p>
-                ${insight.style ? `<p><strong>Stil:</strong> ${insight.style}</p>` : ''}
-                ${(insight.color_palette || []).length ? `<p><strong>Färger:</strong> ${(insight.color_palette || []).join(', ')}</p>` : ''}
-                ${badges.length ? `<div class="vision-badges">${badges.map(tag => `<span class="vision-badge">${tag}</span>`).join('')}</div>` : ''}
-            `;
-        }
-    }
-
-    const renderOutput = document.getElementById('vision-render-output');
-    if (renderOutput) {
-        if (state.visionRenderImage) {
-            renderOutput.innerHTML = `<img src="${state.visionRenderImage}" alt="AI-genererad visualisering">`;
-        } else {
-            renderOutput.innerHTML = '<p class="muted">Ingen bild genererad ännu.</p>';
-        }
-    }
-    const renderSelect = document.getElementById('vision-render-listing');
-    if (renderSelect) {
-        const prev = renderSelect.value;
-        renderSelect.innerHTML = '<option value="">Välj objekt</option>' + state.listings.map(item => `<option value="${item.id}">${item.address || 'Namnlöst objekt'}</option>`).join('');
-        if (prev && state.listings.some(item => item.id === prev)) {
-            renderSelect.value = prev;
-        }
-    }
-    const attachBtn = document.getElementById('vision-render-attach');
-    if (attachBtn) {
-        attachBtn.disabled = !state.visionRenderImage;
-    }
-    const linkStatus = document.getElementById('vision-render-link-status');
-    if (linkStatus && !state.visionRenderImage) {
-        linkStatus.textContent = '';
-        linkStatus.classList.remove('error');
-    }
-}
-
-function handleRemixImageChange(event) {
-    const file = event.target.files?.[0];
-    if (file) {
-        processRemixFile(file);
-    }
-}
-
-function processRemixFile(file) {
-    if (!file.type.startsWith('image/')) {
-        setVisionStatus('remix', 'Välj en bildfil (jpg/png).', true);
-        return;
-    }
-    state.visionRemix.file = file;
-    state.visionRemix.analysis = null;
-    state.visionRemix.storageURL = '';
-    state.visionRemix.storageKey = '';
-    const reader = new FileReader();
-    reader.onload = () => {
-        state.visionRemix.previewURL = reader.result;
-        renderVisionLab();
-    };
-    reader.readAsDataURL(file);
-    analyzeRemixImage(file);
-}
-
-async function analyzeRemixImage(file) {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('image_file', file);
-    setVisionStatus('remix', 'Analyserar rummet...', false);
-    try {
-        const res = await fetch('/api/vision/analyze', {
-            method: 'POST',
-            body: formData,
-        });
-        if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(txt || 'Kunde inte analysera bilden');
-        }
-        state.visionRemix.analysis = await res.json();
-        setVisionStatus('remix', 'Rummet är förstått.', false);
-        renderVisionLab();
-    } catch (err) {
-        state.visionRemix.analysis = null;
-        setVisionStatus('remix', err.message, true);
-    }
 }
 
 function getSelectionRange() {
@@ -1279,41 +1135,39 @@ function bindEvents() {
         await handleFiles(e);
         e.target.value = '';
     });
-    const visionAnalyzeForm = document.getElementById('vision-analyze-form');
-    if (visionAnalyzeForm) {
-        visionAnalyzeForm.addEventListener('submit', handleVisionAnalyze);
-    }
-    const visionDesignForm = document.getElementById('vision-design-form');
-    if (visionDesignForm) {
-        visionDesignForm.addEventListener('submit', handleVisionDesign);
-    }
-    const visionRenderBtn = document.getElementById('vision-render-btn');
-    if (visionRenderBtn) {
-        visionRenderBtn.addEventListener('click', handleVisionRender);
-    }
     const visionRenderAttachBtn = document.getElementById('vision-render-attach');
     if (visionRenderAttachBtn) {
         visionRenderAttachBtn.addEventListener('click', attachRenderToListing);
     }
-    const remixImageInput = document.getElementById('vision-remix-image');
-    if (remixImageInput) {
-        remixImageInput.addEventListener('change', handleRemixImageChange);
+
+    // Studio (simplified image redesign) event bindings
+    const studioFileInput = document.getElementById('studio-file-input');
+    if (studioFileInput) {
+        studioFileInput.addEventListener('change', handleStudioFileSelect);
     }
-    const remixPreview = document.getElementById('vision-remix-preview');
-    if (remixPreview) {
-        remixPreview.addEventListener('dragover', e => {
+    const studioDropzone = document.getElementById('studio-dropzone');
+    if (studioDropzone) {
+        studioDropzone.addEventListener('dragover', e => { e.preventDefault(); studioDropzone.classList.add('dragging'); });
+        studioDropzone.addEventListener('dragleave', () => studioDropzone.classList.remove('dragging'));
+        studioDropzone.addEventListener('drop', e => {
             e.preventDefault();
-            remixPreview.classList.add('dragging');
-        });
-        remixPreview.addEventListener('dragleave', () => remixPreview.classList.remove('dragging'));
-        remixPreview.addEventListener('drop', e => {
-            e.preventDefault();
-            remixPreview.classList.remove('dragging');
+            studioDropzone.classList.remove('dragging');
             const file = e.dataTransfer?.files?.[0];
-            if (file) {
-                processRemixFile(file);
-            }
+            if (file) processStudioFile(file);
         });
+    }
+    document.getElementById('studio-generate-btn')?.addEventListener('click', handleStudioGenerate);
+    document.getElementById('studio-dialog-close')?.addEventListener('click', closeStudioDialog);
+    document.getElementById('studio-dialog-cancel')?.addEventListener('click', closeStudioDialog);
+    document.getElementById('studio-redesign-btn')?.addEventListener('click', openStudioDialog);
+    document.getElementById('studio-new-image-btn')?.addEventListener('click', resetStudio);
+    const studioStyleGrid = document.getElementById('studio-style-grid');
+    if (studioStyleGrid) {
+        studioStyleGrid.addEventListener('click', handleStyleCardClick);
+    }
+    const studioOverlay = document.getElementById('studio-dialog-overlay');
+    if (studioOverlay) {
+        studioOverlay.addEventListener('click', e => { if (e.target === studioOverlay) closeStudioDialog(); });
     }
 
     const dropzone = document.getElementById('dropzone');

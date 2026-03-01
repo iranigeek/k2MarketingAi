@@ -85,7 +85,10 @@ func (v *VertexImagen) Edit(ctx context.Context, payload ImagenPayload) (ImageRe
 	}
 
 	instance, err := structpb.NewValue(map[string]any{
-		"prompt": payload.Prompt,
+		"prompt": "COMPLETE INTERIOR REDESIGN of this room photo. Keep the EXACT same camera angle, windows, doors, walls and architecture. " +
+			"Remove ALL existing furniture and decor. Replace with a completely new set of furniture, rugs, curtains, lamps, art and decorative objects. " +
+			"Every piece must be different — do not keep any original item. The room should look professionally home-staged. " +
+			payload.Prompt,
 		"image": map[string]any{
 			"bytesBase64Encoded": encoded,
 		},

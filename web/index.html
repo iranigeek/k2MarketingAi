@@ -552,88 +552,134 @@
                 <div class="vision-panel__header">
                     <div>
                         <p class="eyebrow">Bildstudio</p>
-                        <h2>Analysera och designa rum</h2>
-                        <p class="muted">Använd Google Gemini för att tolka bilder och få designförslag på sekunder.</p>
+                        <h2>Designa om rummet</h2>
+                        <p class="muted">Tre steg: ladda upp foto → välj stil → få ny inredning. Klart!</p>
                     </div>
                 </div>
-                <div class="vision-grid">
-                    <article class="vision-card">
-                        <h3>Analysera bild</h3>
-                        <p class="muted">Klistra in en bild-URL (från t.ex. ditt mediebibliotek) för att tolka stil, rumstyp och detaljer.</p>
-                        <form id="vision-analyze-form" class="vision-form">
-                            <input id="vision-image-url" type="url" placeholder="https://exempel.se/bild.jpg">
-                            <label class="muted small">eller ladda upp fil</label>
-                            <input id="vision-image-file" type="file" accept="image/*">
-                            <button type="submit" class="primary">Analysera bild</button>
-                            <p id="vision-analyze-status" class="vision-status muted"></p>
-                        </form>
-                        <div id="vision-analyze-result" class="vision-result">
-                            <p class="muted">Ingen analys ännu.</p>
+
+                <!-- How-it-works steps -->
+                <div class="studio-steps" id="studio-steps-bar">
+                    <div class="studio-step active" data-step="1">
+                        <span class="studio-step__num">1</span>
+                        <span class="studio-step__label">Ladda upp foto</span>
+                    </div>
+                    <div class="studio-step__arrow">→</div>
+                    <div class="studio-step" data-step="2">
+                        <span class="studio-step__num">2</span>
+                        <span class="studio-step__label">Välj stil</span>
+                    </div>
+                    <div class="studio-step__arrow">→</div>
+                    <div class="studio-step" data-step="3">
+                        <span class="studio-step__num">3</span>
+                        <span class="studio-step__label">Klar!</span>
+                    </div>
+                </div>
+
+                <!-- Step 1: Upload image -->
+                <div class="studio-upload-area" id="studio-upload-area">
+                    <label class="studio-dropzone" id="studio-dropzone" for="studio-file-input">
+                        <input id="studio-file-input" type="file" accept="image/*" hidden>
+                        <div class="studio-dropzone__inner" id="studio-dropzone-inner">
+                            <span class="studio-dropzone__icon">📷</span>
+                            <p class="studio-dropzone__title">Släpp ett rumsfoto här</p>
+                            <p class="studio-dropzone__sub">eller klicka för att välja fil</p>
+                            <span class="studio-dropzone__formats">JPG / PNG</span>
                         </div>
-                    </article>
-                    <article class="vision-card vision-remix-card">
-                        <h3>Designa om rummet</h3>
-                        <p class="muted">Ladda upp en bild på ett tomt rum, välj känsla eller beskriv drömstilen – AI:n föreslår möbler, färger och detaljer.</p>
-                        <div class="vision-remix-grid">
-                            <div class="vision-remix-pane">
-                                <p class="eyebrow">Utgångsbild</p>
-                                <label class="remix-upload" for="vision-remix-image">
-                                    <input id="vision-remix-image" type="file" accept="image/*" hidden>
-                                    <div id="vision-remix-preview" class="remix-preview">
-                                        <p>Ladda upp eller släpp en bild här</p>
-                                    </div>
-                                    <button type="button" class="ghost">Välj bild</button>
-                                </label>
-                                <p id="vision-remix-status" class="vision-status muted"></p>
-                                <div id="vision-remix-analysis" class="vision-result small">
-                                    <p class="muted">Ingen bild ännu.</p>
-                                </div>
-                            </div>
-                            <div class="vision-remix-pane">
-                                <form id="vision-design-form" class="vision-form">
-                                    <label for="vision-style">Välj stil</label>
-                                    <select id="vision-style">
-                                        <option value="Lyxigt hotellrum">Lyxigt hotellrum</option>
-                                        <option value="Varmt och ombonat">Varmt och ombonat</option>
-                                        <option value="Modern minimalistisk">Modern minimalistisk</option>
-                                        <option value="Naturligt med trä och textil">Naturligt med trä och textil</option>
-                                        <option value="Sval nordisk studio">Sval nordisk studio</option>
-                                    </select>
-                                    <label for="vision-design-prompt">Extra instruktioner</label>
-                                    <textarea id="vision-design-prompt" rows="4" placeholder="Ex: Lägg till en king size-säng med hotellkänsla och grafiska tavlor ovanför."></textarea>
-                                    <button type="submit" class="secondary">Designa rummet</button>
-                                    <p id="vision-design-status" class="vision-status muted"></p>
-                                </form>
-                                <div id="vision-design-output" class="vision-result">
-                                    <p class="muted">Inget designförslag ännu.</p>
-                                </div>
-                                <div class="vision-render">
-                                    <div class="vision-render__header">
-                                        <p class="eyebrow">Visualisering</p>
-                                        <button type="button" class="ghost" id="vision-render-btn">Generera bild</button>
-                                    </div>
-                                    <p class="muted small">Använder Google Gemini för att skapa en fotorealistisk mockup av ditt rum.</p>
-                                    <p id="vision-render-status" class="vision-status muted"></p>
-                                    <div id="vision-render-output" class="vision-render-output">
-                                        <p class="muted">Ingen bild genererad ännu.</p>
-                                    </div>
-                                    <div class="vision-render__attach">
-                                        <label for="vision-render-listing" class="small muted">Koppla bild till objekt</label>
-                                        <select id="vision-render-listing" aria-label="Välj objekt att koppla bilden till">
-                                            <option value="">Välj objekt</option>
-                                        </select>
-                                        <label for="vision-render-note" class="small muted">Extra instruktioner (t.ex. “Behåll kameravinkeln”)</label>
-                                        <textarea id="vision-render-note" rows="2" placeholder="Beskriv detaljer som måste bevaras: vinklar, fönster, dörrar..."></textarea>
-                                        <button type="button" class="secondary" id="vision-render-attach" disabled>Koppla bilden</button>
-                                        <p id="vision-render-link-status" class="vision-status muted"></p>
-                                    </div>
-                                </div>
+                    </label>
+                </div>
+
+                <!-- Result area (original + generated side by side) -->
+                <div class="studio-result hidden" id="studio-result">
+                    <div class="studio-compare">
+                        <div class="studio-compare__pane">
+                            <p class="eyebrow">Före</p>
+                            <div class="studio-compare__img" id="studio-original-img"></div>
+                        </div>
+                        <div class="studio-compare__pane">
+                            <p class="eyebrow">Efter – AI-designad</p>
+                            <div class="studio-compare__img" id="studio-render-img">
+                                <p class="muted">Välj stil och klicka "Skapa" i dialogen…</p>
                             </div>
                         </div>
-                    </article>
+                    </div>
+                    <div class="studio-result__actions">
+                        <button type="button" class="primary" id="studio-redesign-btn">🔄 Testa annan stil</button>
+                        <button type="button" class="secondary" id="studio-new-image-btn">📷 Byt foto</button>
+                        <div class="studio-result__attach">
+                            <select id="vision-render-listing" aria-label="Välj objekt">
+                                <option value="">Koppla till objekt…</option>
+                            </select>
+                            <button type="button" class="secondary" id="vision-render-attach" disabled>Koppla</button>
+                        </div>
+                    </div>
+                    <p id="vision-render-link-status" class="vision-status muted"></p>
                 </div>
             </section>
+
+            <!-- Design dialog (modal) -->
+            <div class="studio-dialog-overlay hidden" id="studio-dialog-overlay">
+                <div class="studio-dialog">
+                    <div class="studio-dialog__header">
+                        <div>
+                            <h3>Hur vill du inreda rummet?</h3>
+                            <p class="muted small">Välj en stil nedan och klicka Skapa – AI:n gör resten.</p>
+                        </div>
+                        <button type="button" class="ghost studio-dialog__close" id="studio-dialog-close">&times;</button>
+                    </div>
+                    <div class="studio-dialog__preview" id="studio-dialog-preview"></div>
+                    <div class="studio-dialog__body">
+                        <p class="studio-dialog__label">Välj inredningsstil</p>
+                        <div class="studio-style-grid" id="studio-style-grid">
+                            <button type="button" class="studio-style-card active" data-style="Modern minimalistisk">
+                                <span class="studio-style-card__emoji">🤍</span>
+                                <span class="studio-style-card__name">Modern minimalistisk</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Lyxigt hotellrum">
+                                <span class="studio-style-card__emoji">✨</span>
+                                <span class="studio-style-card__name">Lyxigt hotellrum</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Varmt och ombonat">
+                                <span class="studio-style-card__emoji">🧶</span>
+                                <span class="studio-style-card__name">Varmt &amp; ombonat</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Naturligt med trä och textil">
+                                <span class="studio-style-card__emoji">🪵</span>
+                                <span class="studio-style-card__name">Naturligt &amp; trä</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Sval nordisk studio">
+                                <span class="studio-style-card__emoji">❄️</span>
+                                <span class="studio-style-card__name">Nordisk &amp; sval</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Industriell loft">
+                                <span class="studio-style-card__emoji">🏭</span>
+                                <span class="studio-style-card__name">Industriell loft</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Japandi">
+                                <span class="studio-style-card__emoji">🎋</span>
+                                <span class="studio-style-card__name">Japandi</span>
+                            </button>
+                            <button type="button" class="studio-style-card" data-style="Art Deco glam">
+                                <span class="studio-style-card__emoji">💎</span>
+                                <span class="studio-style-card__name">Art Deco glam</span>
+                            </button>
+                        </div>
+                        <details class="studio-extras">
+                            <summary>Extra önskemål (valfritt)</summary>
+                            <textarea id="vision-design-prompt" rows="2" placeholder="T.ex. king size-säng, mörka gardiner, gröna växter…"></textarea>
+                        </details>
+                        <p id="studio-dialog-status" class="vision-status muted"></p>
+                    </div>
+                    <div class="studio-dialog__footer">
+                        <button type="button" class="primary studio-generate-btn" id="studio-generate-btn">
+                            <span class="studio-generate-btn__label">✨ Skapa ny inredning</span>
+                            <span class="studio-generate-btn__spinner hidden"></span>
+                        </button>
+                        <button type="button" class="ghost" id="studio-dialog-cancel">Avbryt</button>
+                    </div>
+                </div>
+            </div>
         </div>
+
 
         <div id="view-annuals" class="view">
             <section class="panel annual-panel">

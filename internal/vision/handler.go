@@ -1,6 +1,8 @@
 package vision
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -140,6 +142,22 @@ func (h Handler) Render(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, result)
 		return
 	}
+	// When a base image is provided and the renderer supports editing,
+	// pass the reference image so the model preserves the camera angle.
+	if strings.TrimSpace(req.BaseImageURL) != "" || strings.TrimSpace(req.BaseImageData) != "" {
+		if editor, ok := h.Renderer.(ImageEditor); ok {
+			imgBytes, mime, err := resolveBaseImage(r.Context(), req.BaseImageURL, req.BaseImageData)
+			if err == nil && len(imgBytes) > 0 {
+				result, err := editor.EditImage(r.Context(), req.Prompt, imgBytes, mime)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadGateway)
+					return
+				}
+				writeJSON(w, result)
+				return
+			}
+		}
+	}
 	result, err := h.Renderer.Generate(r.Context(), req.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -153,4 +171,60 @@ func writeJSON(w http.ResponseWriter, payload any) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// resolveBaseImage turns a data-URI or a remote URL into raw bytes + MIME type.
+func resolveBaseImage(ctx context.Context, imageURL, imageData string) ([]byte, string, error) {
+	if trimmed := strings.TrimSpace(imageData); trimmed != "" {
+		mime := "image/jpeg"
+		raw := trimmed
+		if strings.HasPrefix(trimmed, "data:") {
+			parts := strings.SplitN(trimmed, ",", 2)
+			if len(parts) != 2 {
+				return nil, "", fmt.Errorf("invalid data URL")
+			}
+			header := parts[0]
+			if idx := strings.Index(header, ":"); idx >= 0 {
+				rest := header[idx+1:]
+				if semi := strings.Index(rest, ";"); semi > 0 {
+					mime = rest[:semi]
+				} else {
+					mime = rest
+				}
+			}
+			raw = parts[1]
+		}
+		decoded, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil {
+			decoded, err = base64.RawStdEncoding.DecodeString(raw)
+			if err != nil {
+				return nil, "", fmt.Errorf("decode base image data: %w", err)
+			}
+		}
+		return decoded, mime, nil
+	}
+	if strings.TrimSpace(imageURL) == "" {
+		return nil, "", fmt.Errorf("no base image provided")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("image fetch status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" || !strings.Contains(ct, "image/") {
+		ct = "image/jpeg"
+	}
+	return data, ct, nil
 }

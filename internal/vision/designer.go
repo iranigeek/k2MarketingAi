@@ -65,9 +65,36 @@ func (d *GeminiDesigner) Design(ctx context.Context, prompt string) (DesignConce
 
 func parseDesignConcept(content string) (DesignConcept, error) {
 	var concept DesignConcept
+
+	// Try raw JSON first.
 	if err := json.Unmarshal([]byte(content), &concept); err == nil {
 		return concept, nil
 	}
+
+	// Strip markdown code fences (```json ... ``` or ``` ... ```).
+	cleaned := content
+	if idx := strings.Index(cleaned, "```"); idx >= 0 {
+		cleaned = cleaned[idx+3:]
+		// Strip closing fence first.
+		if end := strings.LastIndex(cleaned, "```"); end >= 0 {
+			cleaned = cleaned[:end]
+		}
+		// Remove optional language tag ("json", "JSON", etc.) before the actual JSON.
+		// The tag might be on the same line as the opening brace or on its own line.
+		cleaned = strings.TrimSpace(cleaned)
+		for _, prefix := range []string{"json", "JSON", "Json"} {
+			if strings.HasPrefix(cleaned, prefix) {
+				cleaned = strings.TrimSpace(cleaned[len(prefix):])
+				break
+			}
+		}
+		cleaned = strings.TrimSpace(cleaned)
+		if err := json.Unmarshal([]byte(cleaned), &concept); err == nil {
+			return concept, nil
+		}
+	}
+
+	// Try extracting the outermost { ... } block.
 	start := strings.Index(content, "{")
 	end := strings.LastIndex(content, "}")
 	if start >= 0 && end > start {
@@ -75,5 +102,12 @@ func parseDesignConcept(content string) (DesignConcept, error) {
 			return concept, nil
 		}
 	}
-	return DesignConcept{}, fmt.Errorf("vision: could not parse design response")
+	return DesignConcept{}, fmt.Errorf("vision: could not parse design response: %s", truncate(content, 200))
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
