@@ -553,6 +553,7 @@ function renderDetail() {
         if (galleryEl) galleryEl.classList.add('hidden');
         renderVisionInsights(null);
         renderAnnualInsights(null);
+        renderBRFInsights(null);
         return;
     }
 
@@ -590,6 +591,7 @@ function renderDetail() {
     renderVersions();
     renderVisionInsights(detail);
     renderAnnualInsights(detail);
+    renderBRFInsights(detail);
 }
 
 function getFullCopy(detail) {
@@ -735,6 +737,102 @@ function renderAnnualInsights(detail) {
             </div>
         </div>
     `;
+}
+
+// ── BRF Insights on listing detail ──────────────────────────────────────
+
+async function renderBRFInsights(detail) {
+    const container = document.getElementById('brf-insights');
+    if (!container) return;
+
+    if (!detail || !detail.id) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/brf-intel/by-listing/${detail.id}`);
+        if (!res.ok || res.status === 204) {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+        const report = await res.json();
+        if (!report || !report.id) {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        const score = report.score || {};
+        const gradeClass = `brfintel-grade-${(score.grade || 'c').toLowerCase()}`;
+
+        const riskCount = (report.risks || []).length;
+        const riskSummary = riskCount > 0
+            ? (report.risks || []).slice(0, 3).map(r => {
+                const icon = {critical:'🔴',high:'🟠',medium:'🟡',low:'🟢'}[r.severity] || 'ℹ️';
+                return `<li>${icon} <strong>${r.title}</strong> <span class="muted small">${r.description}</span></li>`;
+            }).join('')
+            : '<li class="muted">Inga riskvarningar.</li>';
+
+        const trend = report.trends || {};
+        const trendIcon = {improving:'📈', declining:'📉', stable:'📊'}[trend.direction] || '📋';
+
+        const adTextHtml = report.ad_text
+            ? `<div class="brf-insights__adtext">
+                <h4>📝 Annonstext om föreningen</h4>
+                <p class="brf-insights__adtext-content">${report.ad_text.replace(/\n/g, '<br>')}</p>
+                <button class="ghost small" onclick="copyBRFAdText(this)" data-text="${report.ad_text.replace(/"/g, '&quot;')}">Kopiera annonstext</button>
+            </div>`
+            : '';
+
+        container.classList.remove('hidden');
+        container.innerHTML = `
+            <div class="brf-insights__header">
+                <div>
+                    <p class="eyebrow">BRF Analys</p>
+                    <h3>${report.brf_name || 'Förening'}</h3>
+                </div>
+                <div class="brf-insights__score ${gradeClass}">
+                    <span class="brf-insights__score-number">${score.total || 0}</span>
+                    <span class="brf-insights__score-label">${score.grade || '—'} · ${score.label || ''}</span>
+                </div>
+            </div>
+            <div class="brf-insights__body">
+                <div class="brf-insights__col">
+                    <h4>⚠️ Risker (${riskCount})</h4>
+                    <ul class="brf-insights__risks">${riskSummary}</ul>
+                </div>
+                <div class="brf-insights__col">
+                    <h4>${trendIcon} Trend: ${trend.direction || '—'}</h4>
+                    <p class="muted small">${trend.summary || 'Ingen trenddata.'}</p>
+                </div>
+            </div>
+            ${adTextHtml}
+            ${report.buyer_summary ? `
+            <details class="brf-insights__details">
+                <summary>Visa köparsammanfattning</summary>
+                <div class="brf-insights__prose">${formatProse(report.buyer_summary)}</div>
+            </details>` : ''}
+            <p class="muted small" style="margin-top:0.5rem;">
+                <a href="#" onclick="event.preventDefault();loadBRFIntelReport('${report.id}');showView('brfintel');">Visa fullständig BRF-analys →</a>
+            </p>
+        `;
+    } catch {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+    }
+}
+
+function copyBRFAdText(btn) {
+    const text = btn.dataset.text;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Kopierad!';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+    });
 }
 
 // ── Studio (simplified one-flow image redesign) ──────────────────────────
@@ -2684,6 +2782,14 @@ function renderBRFIntelResult() {
             <div class="brfintel-prose">${formatProse(r.buyer_summary)}</div>
         </div>` : ''}
 
+        ${r.ad_text ? `
+        <div class="brfintel-card brfintel-card--full brfintel-card--adtext">
+            <h4>📝 Annonstext — Om föreningen</h4>
+            <p class="muted small">Kort text du kan lägga in i din objektsannons under "Om föreningen".</p>
+            <div class="brfintel-adtext-content">${r.ad_text.replace(/\n/g, '<br>')}</div>
+            <button class="ghost small brfintel-copy-adtext" onclick="copyBRFAdText(this)" data-text="${r.ad_text.replace(/"/g, '&quot;')}">📋 Kopiera annonstext</button>
+        </div>` : ''}
+
         ${r.legal_view ? `
         <div class="brfintel-card brfintel-card--full">
             <h4>⚖️ Juridisk säkerhetsvy (mäklare)</h4>
@@ -2711,10 +2817,15 @@ async function loadBRFIntelHistory() {
     if (!listEl) return;
     try {
         const res = await fetch('/api/brf-intel/recent');
-        if (!res.ok) return;
-        const data = await res.json();
-        brfIntelState.history = Array.isArray(data) ? data : [];
-    } catch {
+        if (!res.ok) {
+            console.warn('BRF history fetch failed:', res.status, await res.text().catch(() => ''));
+            brfIntelState.history = [];
+        } else {
+            const data = await res.json();
+            brfIntelState.history = Array.isArray(data) ? data : [];
+        }
+    } catch (err) {
+        console.warn('BRF history fetch error:', err);
         brfIntelState.history = [];
     }
     renderBRFIntelHistory();

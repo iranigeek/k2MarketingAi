@@ -503,6 +503,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		trends JSONB DEFAULT '{}'::jsonb,
 		buyer_summary TEXT NOT NULL DEFAULT '',
 		legal_view TEXT NOT NULL DEFAULT '',
+		ad_text TEXT NOT NULL DEFAULT '',
 		financials JSONB DEFAULT '{}'::jsonb,
 		comparison JSONB,
 		source_years INT[] DEFAULT '{}',
@@ -511,6 +512,11 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`); err != nil {
 		return fmt.Errorf("create brf_reports table: %w", err)
+	}
+
+	// Add ad_text column to existing brf_reports tables
+	if _, err := pool.Exec(ctx, `ALTER TABLE brf_reports ADD COLUMN IF NOT EXISTS ad_text TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("alter brf_reports ad_text: %w", err)
 	}
 
 	// Templates table

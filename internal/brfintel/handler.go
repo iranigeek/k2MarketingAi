@@ -205,6 +205,40 @@ func (h Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetByListing handles GET /api/brf-intel/by-listing/{id}.
+// Returns the most recent BRF report linked to a specific listing.
+func (h Handler) GetByListing(w http.ResponseWriter, r *http.Request) {
+	user, ok := userFromRequest(w, r)
+	if !ok {
+		return
+	}
+
+	listingID := chi.URLParam(r, "id")
+	if listingID == "" {
+		http.Error(w, "listing-id saknas", http.StatusBadRequest)
+		return
+	}
+
+	if h.BRFStore == nil {
+		http.Error(w, "BRF-rapporter stöds inte av denna lagringsbackend", http.StatusNotImplemented)
+		return
+	}
+
+	report, err := h.BRFStore.GetBRFReportByListing(r.Context(), listingID)
+	if err != nil {
+		// No report for this listing — return 204 (not an error, just empty)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if report.OwnerID != "" && report.OwnerID != user.ID {
+		http.Error(w, "åtkomst nekad", http.StatusForbidden)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(report)
+}
+
 // ScoreQuick handles POST /api/brf-intel/score-quick.
 // Returns just the score + risks without LLM summaries (fast, no AI calls).
 func (h Handler) ScoreQuick(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +278,7 @@ func (h Handler) ScoreQuick(w http.ResponseWriter, r *http.Request) {
 type BRFReportStore interface {
 	SaveBRFReport(ctx context.Context, report BRFReport) error
 	GetBRFReport(ctx context.Context, id string) (BRFReport, error)
+	GetBRFReportByListing(ctx context.Context, listingID string) (BRFReport, error)
 	ListBRFReports(ctx context.Context, ownerID string) ([]BRFReport, error)
 	DeleteBRFReport(ctx context.Context, id string) error
 }
@@ -297,6 +332,23 @@ func (s *InMemoryBRFStore) ListBRFReports(_ context.Context, ownerID string) ([]
 func (s *InMemoryBRFStore) DeleteBRFReport(_ context.Context, id string) error {
 	delete(s.reports, id)
 	return nil
+}
+
+func (s *InMemoryBRFStore) GetBRFReportByListing(_ context.Context, listingID string) (BRFReport, error) {
+	var best BRFReport
+	found := false
+	for _, r := range s.reports {
+		if r.ListingID == listingID {
+			if !found || r.UpdatedAt.After(best.UpdatedAt) {
+				best = r
+				found = true
+			}
+		}
+	}
+	if !found {
+		return BRFReport{}, fmt.Errorf("BRF-rapport för listing %s hittades inte", listingID)
+	}
+	return best, nil
 }
 
 // ──────────────────────────────────────────────────────────────────────

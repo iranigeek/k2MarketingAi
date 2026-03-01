@@ -95,6 +95,7 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 				r.Get("/reports", brfIntelHandler.List)
 				r.Get("/recent", brfIntelHandler.RecentReports)
 				r.Get("/reports/{id}", brfIntelHandler.Get)
+				r.Get("/by-listing/{id}", brfIntelHandler.GetByListing)
 				r.Delete("/reports/{id}", brfIntelHandler.Delete)
 			})
 

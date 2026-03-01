@@ -171,6 +171,87 @@ Ekonomisk trend: %s`,
 	return strings.TrimSpace(reply), nil
 }
 
+// generateAdText creates a short, compelling text about the BRF that can be
+// inserted directly into a property listing / ad. It highlights the positive
+// aspects of the association's finances while being honest about any concerns.
+func (a *Analyzer) generateAdText(ctx context.Context, report BRFReport) (string, error) {
+	if a.llm == nil {
+		return "", fmt.Errorf("LLM client not configured")
+	}
+
+	modelCtx := llm.WithModel(ctx, "gemini-3-pro-preview")
+
+	systemPrompt := `Du är en erfaren fastighetsmäklare som skriver korta, säljande texter om bostadsrättsföreningar för objektsannonser.
+
+Skriv en kort text (3–5 meningar, max ~120 ord) som kan läggas direkt i en bostadsannons under rubriken "Om föreningen".
+
+Regler:
+- Skriv i tredje person ("Föreningen...")
+- Lyft fram positiva aspekter: låga skulder, stabil ekonomi, bra skick, genomförda renoveringar, etc.
+- Om det finns uppenbara risker, formulera dem neutralt och framåtblickande (inte alarmistiskt)
+- Inkludera BRF-score om det är högt (≥60), t.ex. "ekonomisk hälsopoäng 78/100"
+- Nämn byggår om det finns
+- Var kort, professionell och säljande
+- Avsluta med något positivt
+- Inga rubriker, bara en löpande kort text
+- Svara enbart med texten, ingen JSON eller markdown`
+
+	riskSummary := "Inga riskvarningar identifierade."
+	if len(report.Risks) > 0 {
+		riskLines := make([]string, 0, len(report.Risks))
+		for _, r := range report.Risks {
+			riskLines = append(riskLines, fmt.Sprintf("- %s: %s", r.Severity, r.Title))
+		}
+		riskSummary = strings.Join(riskLines, "\n")
+	}
+
+	userPrompt := fmt.Sprintf(`BRF: %s
+Org.nr: %s
+Stad: %s
+BRF Score: %d/100 (Betyg: %s — %s)
+Byggår: %d
+Skuld/m²: %.0f kr
+Avgift/m²/år: %.0f kr
+Årsresultat: %.0f kr
+Reparationsfond: %.0f kr
+Kassa & bank: %.0f kr
+Markstatus: %s
+Energiklass: %s
+Renoveringar genomförda: %s
+Renoveringar planerade: %s
+Trend: %s
+Risker: %s`,
+		report.BRFName,
+		report.OrgNumber,
+		nonEmpty(report.City, report.Municipality),
+		report.Score.Total,
+		report.Score.Grade,
+		report.Score.Label,
+		report.Financials.BuildYear,
+		report.Financials.DebtPerSqm,
+		report.Financials.AvgiftPerSqm,
+		report.Financials.NetResult,
+		report.Financials.RepairFund,
+		report.Financials.CashAndBank,
+		nonEmpty(report.Financials.LandStatus, "Ej angivet"),
+		nonEmpty(report.Financials.EnergyClass, "Ej angivet"),
+		nonEmpty(report.Financials.RenovationsDone, "Ej angivet"),
+		nonEmpty(report.Financials.RenovationsPlanned, "Ej angivet"),
+		report.Trends.Summary,
+		riskSummary,
+	)
+
+	reply, err := a.llm.ChatCompletion(modelCtx, []llm.ChatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}, 0.5)
+	if err != nil {
+		return "", fmt.Errorf("ad text LLM: %w", err)
+	}
+
+	return strings.TrimSpace(reply), nil
+}
+
 // extractFinancialsFromText uses the LLM to extract structured financials from raw text.
 func (a *Analyzer) extractFinancialsFromText(ctx context.Context, text string) (Financials, error) {
 	if a.llm == nil {

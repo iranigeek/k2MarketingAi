@@ -95,6 +95,14 @@ func (a *Analyzer) Analyze(ctx context.Context, req AnalyzeRequest, ownerID stri
 		} else {
 			log.Printf("brfintel: [%s] legal view failed (non-fatal): %v", req.BRFName, err)
 		}
+
+		log.Printf("brfintel: [%s] step 5 — generating ad text", req.BRFName)
+		adText, err := a.generateAdText(ctx, report)
+		if err == nil {
+			report.AdText = adText
+		} else {
+			log.Printf("brfintel: [%s] ad text failed (non-fatal): %v", req.BRFName, err)
+		}
 	}
 
 	// ── Step 6: Peer comparison (if we have stored reports) ──

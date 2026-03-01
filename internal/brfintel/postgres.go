@@ -43,14 +43,14 @@ func (s *PostgresBRFStore) SaveBRFReport(ctx context.Context, report BRFReport) 
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO brf_reports (
 			id, owner_id, brf_name, org_number, municipality, city, listing_id,
-			score, risks, trends, buyer_summary, legal_view,
+			score, risks, trends, buyer_summary, legal_view, ad_text,
 			financials, comparison, source_years, source_documents,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10, $11, $12,
-			$13, $14, $15, $16,
-			$17, $18
+			$8, $9, $10, $11, $12, $13,
+			$14, $15, $16, $17,
+			$18, $19
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			brf_name = EXCLUDED.brf_name,
@@ -63,6 +63,7 @@ func (s *PostgresBRFStore) SaveBRFReport(ctx context.Context, report BRFReport) 
 			trends = EXCLUDED.trends,
 			buyer_summary = EXCLUDED.buyer_summary,
 			legal_view = EXCLUDED.legal_view,
+			ad_text = EXCLUDED.ad_text,
 			financials = EXCLUDED.financials,
 			comparison = EXCLUDED.comparison,
 			source_years = EXCLUDED.source_years,
@@ -70,7 +71,7 @@ func (s *PostgresBRFStore) SaveBRFReport(ctx context.Context, report BRFReport) 
 			updated_at = EXCLUDED.updated_at`,
 		report.ID, report.OwnerID, report.BRFName, report.OrgNumber,
 		report.Municipality, report.City, report.ListingID,
-		scoreJSON, risksJSON, trendsJSON, report.BuyerSummary, report.LegalView,
+		scoreJSON, risksJSON, trendsJSON, report.BuyerSummary, report.LegalView, report.AdText,
 		financialsJSON, comparisonJSON, report.SourceYears, sourceDocsJSON,
 		now, now,
 	)
@@ -83,17 +84,17 @@ func (s *PostgresBRFStore) SaveBRFReport(ctx context.Context, report BRFReport) 
 // GetBRFReport retrieves a single BRF report by ID.
 func (s *PostgresBRFStore) GetBRFReport(ctx context.Context, id string) (BRFReport, error) {
 	var r BRFReport
-	var scoreJSON, risksJSON, trendsJSON, financialsJSON, sourceDocsJSON []byte
-	var comparisonJSON *[]byte
+	var scoreJSON, risksJSON, trendsJSON, financialsJSON, sourceDocsJSON string
+	var comparisonJSON *string
 
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, owner_id, brf_name, org_number, municipality, city, listing_id,
-			score, risks, trends, buyer_summary, legal_view,
-			financials, comparison, source_years, source_documents,
+			score::text, risks::text, trends::text, buyer_summary, legal_view, ad_text,
+			financials::text, comparison::text, source_years, source_documents::text,
 			created_at, updated_at
 		FROM brf_reports WHERE id = $1`, id).Scan(
 		&r.ID, &r.OwnerID, &r.BRFName, &r.OrgNumber, &r.Municipality, &r.City, &r.ListingID,
-		&scoreJSON, &risksJSON, &trendsJSON, &r.BuyerSummary, &r.LegalView,
+		&scoreJSON, &risksJSON, &trendsJSON, &r.BuyerSummary, &r.LegalView, &r.AdText,
 		&financialsJSON, &comparisonJSON, &r.SourceYears, &sourceDocsJSON,
 		&r.CreatedAt, &r.UpdatedAt,
 	)
@@ -101,14 +102,14 @@ func (s *PostgresBRFStore) GetBRFReport(ctx context.Context, id string) (BRFRepo
 		return BRFReport{}, fmt.Errorf("get brf report %s: %w", id, err)
 	}
 
-	_ = json.Unmarshal(scoreJSON, &r.Score)
-	_ = json.Unmarshal(risksJSON, &r.Risks)
-	_ = json.Unmarshal(trendsJSON, &r.Trends)
-	_ = json.Unmarshal(financialsJSON, &r.Financials)
-	_ = json.Unmarshal(sourceDocsJSON, &r.SourceDocuments)
+	_ = json.Unmarshal([]byte(scoreJSON), &r.Score)
+	_ = json.Unmarshal([]byte(risksJSON), &r.Risks)
+	_ = json.Unmarshal([]byte(trendsJSON), &r.Trends)
+	_ = json.Unmarshal([]byte(financialsJSON), &r.Financials)
+	_ = json.Unmarshal([]byte(sourceDocsJSON), &r.SourceDocuments)
 	if comparisonJSON != nil {
 		var comp PeerComparison
-		if err := json.Unmarshal(*comparisonJSON, &comp); err == nil {
+		if err := json.Unmarshal([]byte(*comparisonJSON), &comp); err == nil {
 			r.Comparison = &comp
 		}
 	}
@@ -120,8 +121,8 @@ func (s *PostgresBRFStore) GetBRFReport(ctx context.Context, id string) (BRFRepo
 func (s *PostgresBRFStore) ListBRFReports(ctx context.Context, ownerID string) ([]BRFReport, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, owner_id, brf_name, org_number, municipality, city, listing_id,
-			score, risks, trends, buyer_summary, legal_view,
-			financials, comparison, source_years, source_documents,
+			score::text, risks::text, trends::text, buyer_summary, legal_view, ad_text,
+			financials::text, comparison::text, source_years, source_documents::text,
 			created_at, updated_at
 		FROM brf_reports
 		WHERE owner_id = $1
@@ -134,26 +135,26 @@ func (s *PostgresBRFStore) ListBRFReports(ctx context.Context, ownerID string) (
 	var reports []BRFReport
 	for rows.Next() {
 		var r BRFReport
-		var scoreJSON, risksJSON, trendsJSON, financialsJSON, sourceDocsJSON []byte
-		var comparisonJSON *[]byte
+		var scoreJSON, risksJSON, trendsJSON, financialsJSON, sourceDocsJSON string
+		var comparisonJSON *string
 
 		if err := rows.Scan(
 			&r.ID, &r.OwnerID, &r.BRFName, &r.OrgNumber, &r.Municipality, &r.City, &r.ListingID,
-			&scoreJSON, &risksJSON, &trendsJSON, &r.BuyerSummary, &r.LegalView,
+			&scoreJSON, &risksJSON, &trendsJSON, &r.BuyerSummary, &r.LegalView, &r.AdText,
 			&financialsJSON, &comparisonJSON, &r.SourceYears, &sourceDocsJSON,
 			&r.CreatedAt, &r.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan brf report: %w", err)
 		}
 
-		_ = json.Unmarshal(scoreJSON, &r.Score)
-		_ = json.Unmarshal(risksJSON, &r.Risks)
-		_ = json.Unmarshal(trendsJSON, &r.Trends)
-		_ = json.Unmarshal(financialsJSON, &r.Financials)
-		_ = json.Unmarshal(sourceDocsJSON, &r.SourceDocuments)
+		_ = json.Unmarshal([]byte(scoreJSON), &r.Score)
+		_ = json.Unmarshal([]byte(risksJSON), &r.Risks)
+		_ = json.Unmarshal([]byte(trendsJSON), &r.Trends)
+		_ = json.Unmarshal([]byte(financialsJSON), &r.Financials)
+		_ = json.Unmarshal([]byte(sourceDocsJSON), &r.SourceDocuments)
 		if comparisonJSON != nil {
 			var comp PeerComparison
-			if err := json.Unmarshal(*comparisonJSON, &comp); err == nil {
+			if err := json.Unmarshal([]byte(*comparisonJSON), &comp); err == nil {
 				r.Comparison = &comp
 			}
 		}
@@ -171,4 +172,41 @@ func (s *PostgresBRFStore) DeleteBRFReport(ctx context.Context, id string) error
 		return fmt.Errorf("delete brf report: %w", err)
 	}
 	return nil
+}
+
+// GetBRFReportByListing retrieves the most recent BRF report linked to a listing.
+func (s *PostgresBRFStore) GetBRFReportByListing(ctx context.Context, listingID string) (BRFReport, error) {
+	var r BRFReport
+	var scoreJSON, risksJSON, trendsJSON, financialsJSON, sourceDocsJSON string
+	var comparisonJSON *string
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, owner_id, brf_name, org_number, municipality, city, listing_id,
+			score::text, risks::text, trends::text, buyer_summary, legal_view, ad_text,
+			financials::text, comparison::text, source_years, source_documents::text,
+			created_at, updated_at
+		FROM brf_reports WHERE listing_id = $1
+		ORDER BY updated_at DESC LIMIT 1`, listingID).Scan(
+		&r.ID, &r.OwnerID, &r.BRFName, &r.OrgNumber, &r.Municipality, &r.City, &r.ListingID,
+		&scoreJSON, &risksJSON, &trendsJSON, &r.BuyerSummary, &r.LegalView, &r.AdText,
+		&financialsJSON, &comparisonJSON, &r.SourceYears, &sourceDocsJSON,
+		&r.CreatedAt, &r.UpdatedAt,
+	)
+	if err != nil {
+		return BRFReport{}, fmt.Errorf("get brf report by listing %s: %w", listingID, err)
+	}
+
+	_ = json.Unmarshal([]byte(scoreJSON), &r.Score)
+	_ = json.Unmarshal([]byte(risksJSON), &r.Risks)
+	_ = json.Unmarshal([]byte(trendsJSON), &r.Trends)
+	_ = json.Unmarshal([]byte(financialsJSON), &r.Financials)
+	_ = json.Unmarshal([]byte(sourceDocsJSON), &r.SourceDocuments)
+	if comparisonJSON != nil {
+		var comp PeerComparison
+		if err := json.Unmarshal([]byte(*comparisonJSON), &comp); err == nil {
+			r.Comparison = &comp
+		}
+	}
+
+	return r, nil
 }

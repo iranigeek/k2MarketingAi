@@ -168,8 +168,12 @@ func (h Handler) AnalyzePDF(w http.ResponseWriter, r *http.Request) {
 	// Persist
 	if h.BRFStore != nil {
 		if err := h.BRFStore.SaveBRFReport(r.Context(), report); err != nil {
-			log.Printf("brfintel: failed to save report %s: %v", report.ID, err)
+			log.Printf("brfintel: SAVE FAILED report=%s owner=%s brf=%s: %v", report.ID, report.OwnerID, report.BRFName, err)
+		} else {
+			log.Printf("brfintel: report saved id=%s owner=%s brf=%s", report.ID, report.OwnerID, report.BRFName)
 		}
+	} else {
+		log.Printf("brfintel: WARNING BRFStore is nil, report %s NOT saved", report.ID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -312,7 +316,10 @@ func (h Handler) RecentReports(w http.ResponseWriter, r *http.Request) {
 
 	reports, err := h.BRFStore.ListBRFReports(r.Context(), user.ID)
 	if err != nil {
-		http.Error(w, "kunde inte hämta rapporter", http.StatusInternalServerError)
+		fmt.Printf("brfintel: RecentReports list failed for user %s: %v\n", user.ID, err)
+		// Return empty array instead of error — don't break the UI
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]struct{}{})
 		return
 	}
 
@@ -330,7 +337,7 @@ func (h Handler) RecentReports(w http.ResponseWriter, r *http.Request) {
 		CreatedAt time.Time `json:"created_at"`
 	}
 
-	var brief []briefReport
+	brief := make([]briefReport, 0, len(reports))
 	for _, rpt := range reports {
 		brief = append(brief, briefReport{
 			ID:        rpt.ID,

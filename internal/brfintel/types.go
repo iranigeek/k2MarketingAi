@@ -23,6 +23,7 @@ type BRFReport struct {
 	Trends          EconomicTrend    `json:"trends"`
 	BuyerSummary    string           `json:"buyer_summary"`
 	LegalView       string           `json:"legal_view"`
+	AdText          string           `json:"ad_text"`
 	Financials      Financials       `json:"financials"`
 	Comparison      *PeerComparison  `json:"comparison,omitempty"`
 	SourceYears     []int            `json:"source_years"`

@@ -1325,6 +1325,35 @@ body.sidebar-open .sidebar {
 .brfintel-history-score.brfintel-grade-f { background: #991b1b; }
 .brfintel-history-meta { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 
+/* BRF Ad Text card */
+.brfintel-card--adtext { background: #f0fdf4; border-color: #bbf7d0; }
+.brfintel-adtext-content { font-size: 0.95rem; line-height: 1.6; margin: 10px 0; padding: 12px; background: white; border-radius: 10px; border: 1px solid #d1fae5; }
+.brfintel-copy-adtext { margin-top: 6px; }
+
+/* BRF Insights on listing detail */
+.brf-insights { background: #f7f9fe; border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-top: 10px; }
+.brf-insights__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.brf-insights__header h3 { margin: 0; font-size: 1rem; }
+.brf-insights__score { display: flex; flex-direction: column; align-items: center; padding: 8px 14px; border-radius: 12px; background: white; border: 1px solid var(--border); }
+.brf-insights__score-number { font-size: 1.3rem; font-weight: 800; }
+.brf-insights__score-label { font-size: 0.75rem; color: var(--muted); }
+.brf-insights__score.brfintel-grade-a { border-color: #22c55e; }
+.brf-insights__score.brfintel-grade-b { border-color: #86efac; }
+.brf-insights__score.brfintel-grade-c { border-color: #eab308; }
+.brf-insights__score.brfintel-grade-d { border-color: #f97316; }
+.brf-insights__score.brfintel-grade-e, .brf-insights__score.brfintel-grade-f { border-color: #ef4444; }
+.brf-insights__body { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.brf-insights__body h4 { margin: 0 0 6px; font-size: 0.9rem; }
+.brf-insights__risks { margin: 0; padding: 0 0 0 0; list-style: none; font-size: 0.88rem; }
+.brf-insights__risks li { margin-bottom: 4px; }
+.brf-insights__adtext { margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0; }
+.brf-insights__adtext h4 { margin: 0 0 6px; font-size: 0.9rem; }
+.brf-insights__adtext-content { font-size: 0.92rem; line-height: 1.5; margin-bottom: 8px; }
+.brf-insights__details { margin-top: 10px; }
+.brf-insights__details summary { cursor: pointer; font-size: 0.88rem; color: var(--muted); }
+.brf-insights__prose p { font-size: 0.9rem; line-height: 1.5; margin: 6px 0; }
+@media (max-width: 600px) { .brf-insights__body { grid-template-columns: 1fr; } }
+
 @media (max-width: 600px) {
     .brfintel-score-hero { flex-direction: column; text-align: center; padding: 18px; }
     .brfintel-grid { grid-template-columns: 1fr; }
