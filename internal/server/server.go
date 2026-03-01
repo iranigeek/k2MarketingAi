@@ -58,6 +58,11 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 			})
 			r.Route("/listings", func(r chi.Router) {
 				r.Get("/", listingHandler.List)
+				// AI-powered listing routes: require paid subscription or free-tier quota
+				r.Group(func(r chi.Router) {
+					r.Use(usageLimiter.RequirePaidOrQuota)
+					r.Post("/", listingHandler.Create)
+				})
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", listingHandler.Get)
 					r.Post("/images", listingHandler.AttachImage)
@@ -67,6 +72,10 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 					r.Delete("/sections/{slug}", listingHandler.DeleteSection)
 					r.Get("/export", listingHandler.ExportFullCopy)
 					r.Delete("/", listingHandler.DeleteListing)
+					r.Group(func(r chi.Router) {
+						r.Use(usageLimiter.RequirePaidOrQuota)
+						r.Post("/sections/{slug}/rewrite", listingHandler.RewriteSection)
+					})
 				})
 			})
 			r.Route("/style-profiles", func(r chi.Router) {
@@ -92,8 +101,6 @@ func New(port string, authHandler auth.Handler, authMiddleware auth.Middleware, 
 			// ── AI-powered routes: require paid subscription or free-tier quota ──
 			r.Group(func(r chi.Router) {
 				r.Use(usageLimiter.RequirePaidOrQuota)
-				r.Post("/listings", listingHandler.Create)
-				r.Post("/listings/{id}/sections/{slug}/rewrite", listingHandler.RewriteSection)
 				r.Post("/annual-reports/extract", listingHandler.ExtractAnnualReport)
 				r.Post("/annual-reports/summarize", listingHandler.SummarizeAnnualReport)
 				r.Route("/vision", func(r chi.Router) {
