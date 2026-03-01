@@ -126,59 +126,38 @@ func (g *GeminiImageGenerator) EditImage(ctx context.Context, prompt string, ima
 		mimeType = "image/jpeg"
 	}
 
-	// Build a strong wrapper that hammers the two immutable constraints
-	// (camera angle + windows) and makes everything else freely changeable.
-	fullPrompt := "" +
-		"⚠️ CRITICAL RULE — READ BEFORE ANYTHING ELSE ⚠️\n" +
-		"NEVER remove, add, resize, move, or obscure ANY window. Every window visible in the input photo MUST appear in the output at the EXACT same position, size, and shape. This rule overrides ALL other instructions.\n\n" +
+	// ── System instruction: laser-focused, ultra-short. ──
+	// Long instructions cause the model to lose track of constraints.
+	// Keep it to the absolute minimum so windows/camera are not diluted.
+	systemConstraint := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "You edit room photos. Rules:\n" +
+				"- NEVER move, remove, resize or add windows. Windows stay pixel-identical.\n" +
+				"- NEVER change the camera angle, perspective or crop.\n" +
+				"- ONLY replace furniture, decor, wall paint, floor finish and textiles."},
+		},
+	}
 
-		"════════ 🔒 LOCKED — NEVER CHANGE ════════\n" +
-		"Only TWO things are locked:\n" +
-		"1. CAMERA — Keep the EXACT camera angle, perspective, lens distortion, focal length, composition, and crop. Do not rotate, pan, tilt, zoom, or reframe even slightly.\n" +
-		"2. WINDOWS — Keep every window EXACTLY as-is: same count, same size, same position, same glass, same frame. If the photo shows 1 window → output has 1 window in the same spot. If it shows 4 → output has 4 in the same spots. NEVER remove, add, cover, or resize a window.\n\n" +
-
-		"════════ ✅ FREELY CHANGEABLE ════════\n" +
-		"You MAY (and SHOULD) dramatically change ALL of the following:\n" +
-		"• WALL COLOR — repaint walls any color (white, dark, accent wall, etc.)\n" +
-		"• FLOOR — change floor color, finish, add/replace rugs\n" +
-		"• ALL FURNITURE — replace every sofa, bed, table, chair, shelf, cabinet with completely new ones\n" +
-		"• CURTAINS & BLINDS — replace with new style/color (but the window behind must still be visible/intact)\n" +
-		"• LIGHTING — replace all lamps, pendants, sconces\n" +
-		"• TEXTILES — new rugs, cushions, throws, bedding\n" +
-		"• WALL DECOR — new art, mirrors, shelves\n" +
-		"• PLANTS & ACCESSORIES — new plants, books, candles, vases\n" +
-		"• DOORS — may change door color/style\n" +
-		"• CEILING — may change ceiling color\n\n" +
-
-		"════════ HOW TO EXECUTE ════════\n" +
-		"Step 1: Mentally EMPTY the room — remove every movable object.\n" +
-		"Step 2: Verify all windows are still present and untouched.\n" +
-		"Step 3: FILL the room with a completely new interior. Every item must be different from the original.\n" +
-		"Step 4: Before outputting, COUNT the windows in your result and CONFIRM the count matches the input.\n\n" +
-
-		"MINIMUM new items: main furniture (sofa/bed/dining table), secondary furniture (coffee table, side tables, bookshelf/console), large area rug, curtains, 3+ light sources (pendant + floor lamp + table lamp), throw pillows, 2-3 art pieces, 1-2 plants, decorative accessories.\n\n" +
-
-		"The change must be DRAMATIC — like a professional before/after home renovation. Magazine-quality staging.\n" +
-		"OUTPUT: Single photorealistic image, 4K quality, natural lighting.\n\n" +
-
-		"⚠️ FINAL CHECK: Does the output have the SAME number of windows in the SAME positions as the input? If not, REDO it. ⚠️\n\n" +
-
-		"════════ STYLE INSTRUCTIONS FROM USER ════════\n" +
-		prompt
+	// ── User message: image FIRST so the model anchors on it, then a short edit instruction. ──
+	// The shorter the edit instruction, the more faithfully the model preserves structure.
+	editInstruction := "Edit this photo: replace all furniture and decor with new " + strings.TrimSpace(prompt) +
+		"\nKeep every window exactly where it is. Same camera angle."
 
 	contents := []*genai.Content{
 		{
 			Role: "user",
 			Parts: []*genai.Part{
+				// Image first — model sees the room before reading what to change.
 				{InlineData: &genai.Blob{MIMEType: mimeType, Data: imageData}},
-				{Text: fullPrompt},
+				{Text: editInstruction},
 			},
 		},
 	}
 
 	resp, err := client.Models.GenerateContent(childCtx, g.model, contents, &genai.GenerateContentConfig{
+		SystemInstruction:  systemConstraint,
 		ResponseModalities: []string{"IMAGE", "TEXT"},
-		Temperature:        floatPtr(0.9),
+		Temperature:        floatPtr(0.1),
 	})
 	if err != nil {
 		return ImageResult{}, fmt.Errorf("vision: redigering misslyckades: %w", err)

@@ -960,43 +960,20 @@ function handleStyleCardClick(event) {
     card.classList.add('active');
 }
 
-/** Build aggressive redesign prompt – sent directly to /api/vision/render */
+/** Build redesign prompt – the heavy constraints are in the backend SystemInstruction.
+ *  This prompt only needs to specify WHAT to change (style + extras). Keep it short. */
 function buildStudioPrompt(style, extra) {
     const parts = [];
-    parts.push('⚠️ VIKTIGASTE REGELN – LÄS FÖRST: Ta ALDRIG bort, lägg till, flytta eller dölj något FÖNSTER. Varje fönster i originalfotot MÅSTE finnas kvar på EXAKT samma plats, storlek och form. Denna regel gäller över ALLA andra instruktioner.');
+    parts.push('Inredningsstil: "' + (style || 'Modern minimalistisk') + '"');
     parts.push('');
-    parts.push('🔒 LÅST – FÅR ALDRIG ÄNDRAS:');
-    parts.push('1. KAMERAVINKEL – Behåll EXAKT samma kameravinkel, perspektiv, linsförvrängning, komposition och beskärning.');
-    parts.push('2. FÖNSTER – Samma antal, storlek, position och form. Har fotot 2 fönster ska resultatet ha EXAKT 2 fönster på samma ställe. ALDRIG ta bort ett fönster.');
-    parts.push('');
-    parts.push('✅ FÅR OCH SKA ÄNDRAS DRAMATISKT:');
-    parts.push('• VÄGGFÄRG – måla om till valfri färg');
-    parts.push('• GOLV – byt golvfärg/finish, lägg ny matta');
-    parts.push('• ALLA MÖBLER – byt ut varje soffa, säng, bord, stol, hylla mot helt nya');
-    parts.push('• GARDINER – byt stil/färg (fönstret bakom ska fortfarande synas)');
-    parts.push('• BELYSNING – nya lampor, pendlar, golvlampor');
-    parts.push('• TEXTILIER – nya mattor, kuddar, filtar, sängkläder');
-    parts.push('• VÄGGDEKOR – ny konst, nya speglar, nya hyllor');
-    parts.push('• VÄXTER & TILLBEHÖR – nya växter, böcker, ljus, vaser');
-    parts.push('• DÖRRAR – kan byta färg/stil');
-    parts.push('• TAK – kan byta färg');
-    parts.push('');
-    parts.push('STIL: "' + (style || 'Modern minimalistisk') + '"');
-    parts.push('');
-    parts.push('SÅ HÄR GÖR DU:');
-    parts.push('Steg 1: Töm rummet mentalt – ta bort ALLA flyttbara objekt.');
-    parts.push('Steg 2: Kontrollera att alla fönster fortfarande finns kvar och är orörda.');
-    parts.push('Steg 3: Fyll rummet med en HELT NY inredning. Varje föremål ska vara helt annorlunda.');
-    parts.push('Steg 4: RÄKNA fönstren i resultatet och bekräfta att antalet stämmer med originalet.');
-    parts.push('');
-    parts.push('MINIMUM: huvudmöbel (soffa/säng/matbord), sekundära möbler (soffbord, sidobord, hylla), stor matta, gardiner, 3+ ljuskällor (taklampa + golvlampa + bordslampa), kuddar, 2–3 konstverk, 1–2 växter, dekorativa accessoarer.');
+    parts.push('Byt ut ALLA möbler, mattor, gardiner, lampor, kuddar, tavlor, hyllor och all dekoration mot helt nya i den valda stilen.');
+    parts.push('Ändra gärna väggfärg och golvfärg om det passar stilen.');
+    parts.push('Placera minst: huvudmöbel + soffbord/matbord + sidobord + matta + gardiner + 3 lampor + kuddar + 2-3 tavlor + växter + accessoarer.');
+    parts.push('Förändringen ska vara DRAMATISK – professionell homestyling, tidningskvalitet.');
     if (extra) {
         parts.push('');
-        parts.push('EXTRA KRAV FRÅN ANVÄNDAREN (obligatoriskt, inte förslag): ' + extra);
+        parts.push('Extra krav (obligatoriskt): ' + extra);
     }
-    parts.push('');
-    parts.push('⚠️ SLUTKONTROLL: Har resultatet SAMMA antal fönster på SAMMA plats som originalet? Om inte, gör om bilden.');
-    parts.push('Förändringen ska vara DRAMATISK – som ett professionellt före/efter i en renoveringsserie. Fotorealistiskt, 4K-kvalitet.');
     return parts.join('\n');
 }
 
