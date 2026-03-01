@@ -1329,6 +1329,10 @@ body.sidebar-open .sidebar {
 .brfintel-card--adtext { background: #f0fdf4; border-color: #bbf7d0; }
 .brfintel-adtext-content { font-size: 0.95rem; line-height: 1.6; margin: 10px 0; padding: 12px; background: white; border-radius: 10px; border: 1px solid #d1fae5; }
 .brfintel-copy-adtext { margin-top: 6px; }
+.brfintel-adtext-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.brfintel-link-group { display: flex; align-items: center; gap: 6px; }
+.brfintel-link-select { font-size: 0.85rem; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: white; max-width: 200px; }
+.brf-link-btn { white-space: nowrap; }
 
 /* BRF Insights on listing detail */
 .brf-insights { background: #f7f9fe; border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-top: 10px; }
@@ -1349,6 +1353,7 @@ body.sidebar-open .sidebar {
 .brf-insights__adtext { margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0; }
 .brf-insights__adtext h4 { margin: 0 0 6px; font-size: 0.9rem; }
 .brf-insights__adtext-content { font-size: 0.92rem; line-height: 1.5; margin-bottom: 8px; }
+.brf-insights__adtext-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
 .brf-insights__details { margin-top: 10px; }
 .brf-insights__details summary { cursor: pointer; font-size: 0.88rem; color: var(--muted); }
 .brf-insights__prose p { font-size: 0.9rem; line-height: 1.5; margin: 6px 0; }

@@ -783,7 +783,10 @@ async function renderBRFInsights(detail) {
             ? `<div class="brf-insights__adtext">
                 <h4>📝 Annonstext om föreningen</h4>
                 <p class="brf-insights__adtext-content">${report.ad_text.replace(/\n/g, '<br>')}</p>
-                <button class="ghost small" onclick="copyBRFAdText(this)" data-text="${report.ad_text.replace(/"/g, '&quot;')}">Kopiera annonstext</button>
+                <div class="brf-insights__adtext-actions">
+                    <button class="ghost small" onclick="copyBRFAdText(this)" data-text="${report.ad_text.replace(/"/g, '&quot;')}">📋 Kopiera</button>
+                    <button class="ghost small brf-link-btn" onclick="linkBRFAdTextToListing('${detail.id}', this)" data-text="${report.ad_text.replace(/"/g, '&quot;')}">📎 Infoga i annonsen</button>
+                </div>
             </div>`
             : '';
 
@@ -833,6 +836,56 @@ function copyBRFAdText(btn) {
         btn.textContent = 'Kopierad!';
         setTimeout(() => { btn.textContent = orig; }, 1500);
     });
+}
+
+/**
+ * Link BRF ad text to a specific listing by inserting it as an "om-foreningen" section.
+ * Used from the listing detail BRF insights panel.
+ */
+async function linkBRFAdTextToListing(listingId, btn) {
+    const text = btn.dataset.text;
+    if (!text || !listingId) return;
+    const orig = btn.textContent;
+    btn.textContent = 'Sparar...';
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/listings/${listingId}/sections/om-foreningen`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'Om föreningen', content: text }),
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || 'Kunde inte spara texten');
+        }
+        const updated = await res.json();
+        const idx = state.listings.findIndex(item => item.id === updated.id);
+        if (idx !== -1) state.listings[idx] = updated;
+        if (state.current && state.current.id === updated.id) {
+            state.current = updated;
+            renderDetail();
+        }
+        renderObjectList();
+        btn.textContent = '✅ Tillagd!';
+        setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+    } catch (err) {
+        alert(err.message || 'Kunde inte lägga till texten i annonsen.');
+        btn.textContent = orig;
+        btn.disabled = false;
+    }
+}
+
+/**
+ * Link BRF ad text from the BRF analysis page using a listing dropdown selector.
+ */
+async function linkBRFAdTextFromSelect(btn) {
+    const select = document.getElementById('brfintel-link-listing');
+    const listingId = select?.value;
+    if (!listingId) {
+        alert('Välj ett objekt att koppla texten till.');
+        return;
+    }
+    await linkBRFAdTextToListing(listingId, btn);
 }
 
 // ── Studio (simplified one-flow image redesign) ──────────────────────────
@@ -2787,7 +2840,16 @@ function renderBRFIntelResult() {
             <h4>📝 Annonstext — Om föreningen</h4>
             <p class="muted small">Kort text du kan lägga in i din objektsannons under "Om föreningen".</p>
             <div class="brfintel-adtext-content">${r.ad_text.replace(/\n/g, '<br>')}</div>
-            <button class="ghost small brfintel-copy-adtext" onclick="copyBRFAdText(this)" data-text="${r.ad_text.replace(/"/g, '&quot;')}">📋 Kopiera annonstext</button>
+            <div class="brfintel-adtext-actions">
+                <button class="ghost small brfintel-copy-adtext" onclick="copyBRFAdText(this)" data-text="${r.ad_text.replace(/"/g, '&quot;')}">📋 Kopiera annonstext</button>
+                <div class="brfintel-link-group">
+                    <select id="brfintel-link-listing" class="brfintel-link-select">
+                        <option value="">Välj objekt…</option>
+                        ${(state.listings || []).map(l => `<option value="${l.id}">${l.address || 'Namnlöst objekt'}</option>`).join('')}
+                    </select>
+                    <button class="ghost small brf-link-btn" onclick="linkBRFAdTextFromSelect(this)" data-text="${r.ad_text.replace(/"/g, '&quot;')}">📎 Lägg till i annons</button>
+                </div>
+            </div>
         </div>` : ''}
 
         ${r.legal_view ? `
