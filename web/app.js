@@ -390,9 +390,6 @@ async function fetchListings() {
             const valid = new Set(state.listings.map(item => item.id));
             state.annualReport.selectedIds = state.annualReport.selectedIds.filter(id => valid.has(id));
         }
-        updateVolumeStats();
-        updateTimeSavings();
-        updateImageStats();
         renderObjectList();
         renderVisionLab();
         let idToSelect = state.selectedId;
@@ -1054,7 +1051,6 @@ async function applySelectionRewrite(mode) {
         state.current = await res.json();
         pushVersion(getFullCopy(state.current), 'Omskriven');
         renderDetail();
-        incrementRewriteStat();
         setAIStatus('Omskriven klar.', false, true);
     } catch (err) {
         alert(err.message);
@@ -2020,12 +2016,6 @@ function applyVersion(index) {
     renderDetail();
 }
 
-function incrementRewriteStat() {
-    const el = document.getElementById('stat-rewrites');
-    const current = parseInt(el.textContent || '0', 10);
-    el.textContent = current + 1;
-}
-
 async function handleFiles(event) {
     const files = Array.from(event.target.files || event.dataTransfer?.files || []);
     if (!files.length) return;
@@ -2785,7 +2775,6 @@ function renderUploads() {
         item.appendChild(status);
         list.appendChild(item);
     });
-    updateImageStats();
 }
 
 function setAIStatus(message, busy, hideLater) {
@@ -2822,66 +2811,6 @@ async function startEditListing(id) {
     renderUploads();
     showView('generator');
     document.getElementById('listing-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function updateVolumeStats() {
-    const totalEl = document.getElementById('stat-total');
-    const weekEl = document.getElementById('stat-week');
-    const monthEl = document.getElementById('stat-month');
-
-    const listings = Array.isArray(state.listings) ? state.listings : [];
-    const total = listings.length;
-    const week = countListingsWithinDays(7);
-    const month = countListingsWithinDays(30);
-
-    if (totalEl) totalEl.textContent = total;
-    if (weekEl) weekEl.textContent = week;
-    if (monthEl) monthEl.textContent = month;
-}
-
-function updateTimeSavings() {
-    const assumedManualMinutes = 45; // uppskattad manuell tid per annons
-    const assumedAIEditableMinutes = 10; // uppskattad tid med AI + justering
-    const savedPerAd = Math.max(assumedManualMinutes - assumedAIEditableMinutes, 0);
-
-    const now = new Date();
-    const msInDay = 86400000;
-    const listings = state.listings || [];
-    const recent = listings.filter(item => {
-        if (!item.created_at) return true;
-        const created = new Date(item.created_at);
-        return Number.isFinite(created.getTime()) && (now - created) <= 30 * msInDay;
-    });
-
-    const savedMonthly = savedPerAd * recent.length;
-    const savedTotal = savedPerAd * listings.length;
-
-    const avgEl = document.getElementById('stat-saved-avg');
-    const monthEl = document.getElementById('stat-saved-month');
-    const totalEl = document.getElementById('stat-saved-total');
-
-    if (avgEl) avgEl.textContent = formatMinutes(savedPerAd);
-    if (monthEl) monthEl.textContent = formatMinutes(savedMonthly);
-    if (totalEl) totalEl.textContent = formatMinutes(savedTotal);
-}
-
-function countListingsWithinDays(days) {
-    const now = new Date();
-    const limit = days * 86400000;
-    return (state.listings || []).filter(item => {
-        if (!item.created_at) return true;
-        const created = new Date(item.created_at);
-        if (!Number.isFinite(created.getTime())) return false;
-        return (now - created) <= limit;
-    }).length;
-}
-
-function formatMinutes(minutes) {
-    const mins = Math.max(0, Math.round(minutes));
-    if (mins < 90) return `${mins} min`;
-    const hours = Math.floor(mins / 60);
-    const rem = mins % 60;
-    return rem ? `${hours} h ${rem} min` : `${hours} h`;
 }
 
 function showView(view) {
@@ -2930,10 +2859,6 @@ function updateTopbarCopy(view) {
         objects: {
             title: 'Mina objekt',
             subtitle: 'Hantera och öppna befintliga annonser.',
-        },
-        stats: {
-            title: 'Statistik',
-            subtitle: 'Överblick över aktivitet och omskrivningar.',
         },
         vision: {
             title: 'Bildstudio',
@@ -3001,16 +2926,6 @@ function updateSidebarToggleState() {
     }
 }
 
-function updateImageStats() {
-    const processed = state.uploads.filter(file => file.url).length;
-    const el = document.getElementById('stat-images');
-    const avgEl = document.getElementById('stat-images-avg');
-    const listingCount = state.listings.length;
-    const average = listingCount ? processed / listingCount : 0;
-
-    if (el) el.textContent = processed;
-    if (avgEl) avgEl.textContent = average.toFixed(1);
-}
 
 bindEvents();
 renderVisionLab();
