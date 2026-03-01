@@ -184,7 +184,7 @@ func main() {
 		log.Println("stripe billing: disabled (no secret key)")
 	}
 
-	// Usage limiter – free tier: 3 AI calls, then require subscription.
+	// Usage limiter – free tier: 5 AI calls, then require subscription.
 	usageLimiter := auth.UsageLimiter{Store: store}
 	log.Printf("usage limiter: free tier = %d AI calls", storage.FreeUsageLimit)
 
