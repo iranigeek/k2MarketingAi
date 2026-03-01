@@ -205,14 +205,16 @@ func (s *InMemoryStore) SaveStyleProfile(_ context.Context, profile StyleProfile
 	return profile, nil
 }
 
-// ListStyleProfiles returns all profiles.
-func (s *InMemoryStore) ListStyleProfiles(_ context.Context) ([]StyleProfile, error) {
+// ListStyleProfilesByOwner returns profiles belonging to a specific owner.
+func (s *InMemoryStore) ListStyleProfilesByOwner(_ context.Context, ownerID string) ([]StyleProfile, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	profiles := make([]StyleProfile, 0, len(s.styleProfiles))
 	for _, profile := range s.styleProfiles {
-		profiles = append(profiles, profile)
+		if profile.OwnerID == ownerID {
+			profiles = append(profiles, profile)
+		}
 	}
 	return profiles, nil
 }

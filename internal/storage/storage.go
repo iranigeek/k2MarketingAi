@@ -267,6 +267,7 @@ type TemplateSection struct {
 // StyleProfile describes a stored tone-of-voice with sample texts.
 type StyleProfile struct {
 	ID             string     `json:"id"`
+	OwnerID        string     `json:"owner_id"`
 	Name           string     `json:"name"`
 	Description    string     `json:"description"`
 	Tone           string     `json:"tone"`
@@ -335,7 +336,7 @@ type Store interface {
 	UpdateStatus(ctx context.Context, id string, status Status) error
 	DeleteListing(ctx context.Context, id string) error
 	SaveStyleProfile(ctx context.Context, profile StyleProfile) (StyleProfile, error)
-	ListStyleProfiles(ctx context.Context) ([]StyleProfile, error)
+	ListStyleProfilesByOwner(ctx context.Context, ownerID string) ([]StyleProfile, error)
 	GetStyleProfile(ctx context.Context, id string) (StyleProfile, error)
 	SaveTemplate(ctx context.Context, tpl Template) (Template, error)
 	ListTemplatesByOwner(ctx context.Context, ownerID string) ([]Template, error)
@@ -439,6 +440,7 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 
 	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS style_profiles (
 		id TEXT PRIMARY KEY,
+		owner_id TEXT,
 		name TEXT NOT NULL,
 		description TEXT,
 		tone TEXT,
@@ -452,6 +454,9 @@ func ensureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`); err != nil {
 		return fmt.Errorf("create style_profiles table: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE style_profiles ADD COLUMN IF NOT EXISTS owner_id TEXT`); err != nil {
+		return fmt.Errorf("alter style_profiles owner_id: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `ALTER TABLE style_profiles ADD COLUMN IF NOT EXISTS custom_model TEXT`); err != nil {
 		return fmt.Errorf("alter style_profiles custom_model: %w", err)

@@ -1788,9 +1788,13 @@ func (h Handler) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ListStyleProfiles returns all stored style profiles.
+// ListStyleProfiles returns style profiles for the authenticated user.
 func (h Handler) ListStyleProfiles(w http.ResponseWriter, r *http.Request) {
-	profiles, err := h.Store.ListStyleProfiles(r.Context())
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+	profiles, err := h.Store.ListStyleProfilesByOwner(r.Context(), user.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1804,12 +1808,18 @@ func (h Handler) ListStyleProfiles(w http.ResponseWriter, r *http.Request) {
 
 // SaveStyleProfile creates or updates a style profile.
 func (h Handler) SaveStyleProfile(w http.ResponseWriter, r *http.Request) {
+	user, ok := currentUser(w, r)
+	if !ok {
+		return
+	}
+
 	var payload storage.StyleProfile
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	payload.OwnerID = user.ID
 	payload.Name = strings.TrimSpace(payload.Name)
 	payload.Description = strings.TrimSpace(payload.Description)
 	payload.Tone = strings.TrimSpace(payload.Tone)

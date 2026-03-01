@@ -226,9 +226,10 @@ func (s *PostgresStore) SaveStyleProfile(ctx context.Context, profile StyleProfi
 	}
 	profile.UpdatedAt = now
 	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO style_profiles (id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11, now()), $12)
+		INSERT INTO style_profiles (id, owner_id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,COALESCE($12, now()), $13)
 		ON CONFLICT (id) DO UPDATE SET
+			owner_id=EXCLUDED.owner_id,
 			name=EXCLUDED.name,
 			description=EXCLUDED.description,
 			tone=EXCLUDED.tone,
@@ -239,7 +240,7 @@ func (s *PostgresStore) SaveStyleProfile(ctx context.Context, profile StyleProfi
 			dataset_uri=EXCLUDED.dataset_uri,
 			last_trained_at=EXCLUDED.last_trained_at,
 			updated_at=EXCLUDED.updated_at
-	`, profile.ID, profile.Name, profile.Description, profile.Tone, profile.Guidelines, profile.ExampleTexts, profile.ForbiddenWords, nullString(profile.CustomModel), nullString(profile.DatasetURI), profile.LastTrainedAt, nullableTime(profile.CreatedAt), profile.UpdatedAt); err != nil {
+	`, profile.ID, profile.OwnerID, profile.Name, profile.Description, profile.Tone, profile.Guidelines, profile.ExampleTexts, profile.ForbiddenWords, nullString(profile.CustomModel), nullString(profile.DatasetURI), profile.LastTrainedAt, nullableTime(profile.CreatedAt), profile.UpdatedAt); err != nil {
 		return StyleProfile{}, fmt.Errorf("save style profile: %w", err)
 	}
 	return s.GetStyleProfile(ctx, profile.ID)
@@ -259,9 +260,9 @@ func nullString(value string) any {
 	return value
 }
 
-// ListStyleProfiles returns all stored style profiles.
-func (s *PostgresStore) ListStyleProfiles(ctx context.Context) ([]StyleProfile, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at FROM style_profiles ORDER BY name`)
+// ListStyleProfilesByOwner returns style profiles belonging to a specific owner.
+func (s *PostgresStore) ListStyleProfilesByOwner(ctx context.Context, ownerID string) ([]StyleProfile, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, owner_id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at FROM style_profiles WHERE owner_id=$1 ORDER BY name`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("list style profiles: %w", err)
 	}
@@ -280,7 +281,7 @@ func (s *PostgresStore) ListStyleProfiles(ctx context.Context) ([]StyleProfile, 
 
 // GetStyleProfile fetches a profile by ID.
 func (s *PostgresStore) GetStyleProfile(ctx context.Context, id string) (StyleProfile, error) {
-	row := s.pool.QueryRow(ctx, `SELECT id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at FROM style_profiles WHERE id=$1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT id, owner_id, name, description, tone, guidelines, example_texts, forbidden_words, custom_model, dataset_uri, last_trained_at, created_at, updated_at FROM style_profiles WHERE id=$1`, id)
 	profile, err := scanStyleProfile(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -467,12 +468,16 @@ func scanListing(row rowScanner) (Listing, error) {
 func scanStyleProfile(row rowScanner) (StyleProfile, error) {
 	var (
 		profile     StyleProfile
+		ownerID     sql.NullString
 		customModel sql.NullString
 		datasetURI  sql.NullString
 		lastTrained sql.NullTime
 	)
-	if err := row.Scan(&profile.ID, &profile.Name, &profile.Description, &profile.Tone, &profile.Guidelines, &profile.ExampleTexts, &profile.ForbiddenWords, &customModel, &datasetURI, &lastTrained, &profile.CreatedAt, &profile.UpdatedAt); err != nil {
+	if err := row.Scan(&profile.ID, &ownerID, &profile.Name, &profile.Description, &profile.Tone, &profile.Guidelines, &profile.ExampleTexts, &profile.ForbiddenWords, &customModel, &datasetURI, &lastTrained, &profile.CreatedAt, &profile.UpdatedAt); err != nil {
 		return StyleProfile{}, fmt.Errorf("scan style profile: %w", err)
+	}
+	if ownerID.Valid {
+		profile.OwnerID = ownerID.String
 	}
 	if customModel.Valid {
 		profile.CustomModel = customModel.String
