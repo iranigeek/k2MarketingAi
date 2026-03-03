@@ -189,10 +189,8 @@ func (h Handler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var event stripe.Event
 	if h.Config.WebhookSecret != "" {
-		sigHeader := r.Header.Get("Stripe-Signature")
-		log.Printf("stripe webhook DEBUG: body length=%d, sig header length=%d, secret length=%d, secret prefix=%q",
-			len(body), len(sigHeader), len(h.Config.WebhookSecret), h.Config.WebhookSecret[:min(10, len(h.Config.WebhookSecret))])
-		event, err = webhook.ConstructEvent(body, sigHeader, h.Config.WebhookSecret)
+		event, err = webhook.ConstructEventWithOptions(body, r.Header.Get("Stripe-Signature"), h.Config.WebhookSecret,
+			webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true})
 		if err != nil {
 			log.Printf("stripe webhook: signature verification failed: %v", err)
 			http.Error(w, "invalid signature", http.StatusBadRequest)
