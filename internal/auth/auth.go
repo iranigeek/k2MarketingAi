@@ -122,13 +122,18 @@ func (h Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.setSessionCookie(w, created.ID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = jsonResponse(w, http.StatusCreated, map[string]any{
-		"id":         created.ID,
-		"email":      created.Email,
-		"created_at": created.CreatedAt,
-		"approved":   created.Approved,
-		"status":     "approved",
+		"id":                  created.ID,
+		"email":               created.Email,
+		"created_at":          created.CreatedAt,
+		"approved":            created.Approved,
+		"status":              "approved",
+		"subscription_status": created.SubscriptionStatus,
+		"plan_id":             created.PlanID,
+		"usage_count":         created.UsageCount,
+		"usage_limit":         storage.FreeUsageLimit,
 	})
 }
 

@@ -100,7 +100,8 @@ function isUsageLocked(user = state.user) {
     const status = user.subscription_status || '';
     const isPaid = status === 'active' || status === 'trialing';
     const usageCount = user.usage_count || 0;
-    return !isPaid && usageCount >= 3;
+    const usageLimit = user.usage_limit || 5;
+    return !isPaid && usageCount >= usageLimit;
 }
 
 function showAuthOverlay(message = 'Logga in för att fortsätta') {
@@ -358,8 +359,9 @@ window.fetch = async (input, init = {}) => {
 
 function handleUsageLimitReached() {
     state.usageLocked = true;
+    const usageLimit = state.user?.usage_limit || 5;
     if (state.user) {
-        state.user.usage_count = Math.max(state.user.usage_count || 0, 3);
+        state.user.usage_count = Math.max(state.user.usage_count || 0, usageLimit);
     }
     showView('settings');
     renderSubscriptionStatus();
@@ -369,7 +371,7 @@ function handleUsageLimitReached() {
     modal.innerHTML = `
         <div class="usage-limit-card">
             <h2>Gränsen nådd</h2>
-            <p>Du har använt dina 3 kostnadsfria AI-anrop.</p>
+            <p>Du har använt dina ${usageLimit} kostnadsfria AI-anrop.</p>
             <p class="muted">Uppgradera till en prenumeration för obegränsad tillgång till alla AI-funktioner.</p>
             <div class="actions" style="margin-top:1rem;display:flex;gap:0.5rem;">
                 <button class="primary" onclick="this.closest('.usage-limit-modal').remove();showView('settings');renderSubscriptionStatus();">Visa prenumerationer</button>
@@ -3108,7 +3110,7 @@ function renderSubscriptionStatus() {
     const status = user.subscription_status || '';
     const isPaid = status === 'active' || status === 'trialing';
     const usageCount = user.usage_count || 0;
-    const usageLimit = isPaid ? (user.usage_limit || 3) : 3;
+    const usageLimit = user.usage_limit || 5;
     let badge = '';
     let description = '';
 
@@ -3185,7 +3187,7 @@ function renderSidebarUsage() {
     const status = user.subscription_status || '';
     const isPaid = status === 'active' || status === 'trialing';
     const usageCount = user.usage_count || 0;
-    const usageLimit = isPaid ? (user.usage_limit || 3) : 3;
+    const usageLimit = user.usage_limit || 5;
     const remaining = isPaid ? null : Math.max(0, usageLimit - usageCount);
     const pct = isPaid ? 0 : Math.min(100, Math.round((usageCount / usageLimit) * 100));
     const color = pct >= 100 ? '#ef4444' : pct >= 70 ? '#eab308' : '#22c55e';
